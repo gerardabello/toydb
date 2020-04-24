@@ -3,3 +3,10 @@
 [[package]]
 name = "gerardb"
 version = "0.1.0"
+dependencies = [
+ "kv_store",
+]
+
+[[package]]
+name = "kv_store"
+version = "0.1.0"

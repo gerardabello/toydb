@@ -7,13 +7,13 @@ pub trait MemTable {
 
 
 
-pub struct Domain<T: MemTable> {
+pub struct KVStore<T: MemTable> {
     memtable: T,
 }
 
-impl<T: MemTable> Domain<T> {
-    pub fn new(memtable: T) -> Box<Domain<T>> {
-        Box::new(Domain { memtable })
+impl<T: MemTable> KVStore<T> {
+    pub fn new(memtable: T) -> KVStore<T> {
+        KVStore { memtable }
     }
 
 
