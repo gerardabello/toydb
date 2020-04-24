@@ -1,13 +1,17 @@
-mod arrayMemTable;
+mod vec_mem_table;
 mod domain;
 //mod sstable;
 
 fn main() {
-    let memtable = arrayMemTable::ArrayMemTable::new();
+    let memtable: vec_mem_table::VecMemTable<Box<[u8]>, Box<[u8]>> = vec_mem_table::VecMemTable::new();
 
-    let domain = domain::Domain::new(memtable);
+    let mut domain = domain::Domain::new(memtable);
 
-let boxed_str: Box<[u8]> = Box::from(Box::from("hello"));
 
-    domain.set()
+    domain.set("a","mandarina");
+    domain.set("b","platan");
+
+    assert_eq!(domain.get_string("a").unwrap(), "mandarina");
+    assert_eq!(domain.get_string("b").unwrap(), "platan");
+
 }
