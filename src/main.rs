@@ -1,10 +1,11 @@
 use kv_store;
 
 fn main() {
-    let mut kvStore = kv_store::new();
+    let mut kv = kv_store::KVStore::new();
 
-    kvStore.set("b", "test");
+    kv.set("a", "mandarina");
+    kv.set("b", "platan");
 
-    assert_eq!(kvStore.get_string("a").unwrap(), "mandarina");
-    assert_eq!(kvStore.get_string("b").unwrap(), "platan");
+    assert_eq!(kv.get("a").unwrap(), b"mandarina");
+    assert_eq!(kv.get("b").unwrap(), b"platan");
 }
