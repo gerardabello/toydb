@@ -1,3 +1,8 @@
+[workspace]
+members = [
+  "kv_store"
+]
+
 [package]
 name = "gerardb"
 version = "0.1.0"

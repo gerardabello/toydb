@@ -1,6 +1,7 @@
 use kv_store;
 
-fn main() {
+#[test]
+fn test_basic() {
     let mut kv : kv_store::KVStore = Default::default();
 
     kv.set("a", "mandarina");

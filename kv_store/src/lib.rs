@@ -2,8 +2,11 @@ mod domain;
 mod vec_mem_table;
 //mod sstable;
 
+type MemTableType = vec_mem_table::VecMemTable<Box<[u8]>, Box<[u8]>>;
+type DomainKVStoreType = domain::KVStore<MemTableType>;
+
 pub struct KVStore {
-    kv_store_domain: domain::KVStore<vec_mem_table::VecMemTable<Box<[u8]>, Box<[u8]>>>
+    kv_store_domain: DomainKVStoreType,
 }
 
 impl KVStore {
@@ -23,4 +26,9 @@ impl KVStore {
     }
 
 }
-
+ 
+impl Default for KVStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
