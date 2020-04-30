@@ -10,3 +10,4 @@ fn test_basic() {
     assert_eq!(kv.get("a").unwrap(), b"mandarina");
     assert_eq!(kv.get("b").unwrap(), b"platan");
 }
+
