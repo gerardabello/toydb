@@ -9,11 +9,10 @@ pub struct KVStore {
     kv_store_domain: DomainKVStoreType,
 }
 
+
 impl KVStore {
     pub fn new() -> KVStore {
-        let memtable = vec_mem_table::VecMemTable::new();
-
-        let kv_store_domain = domain::KVStore::new(memtable);
+        let kv_store_domain : DomainKVStoreType = domain::KVStore::new();
         KVStore { kv_store_domain }
     }
 
