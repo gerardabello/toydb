@@ -9,9 +9,9 @@ pub struct KVStore {
     kv_store_domain: DomainKVStoreType,
 }
 
-impl <'a> KVStore {
+impl<'a> KVStore {
     pub fn new() -> KVStore {
-        let kv_store_domain : DomainKVStoreType = domain::KVStore::new();
+        let kv_store_domain: DomainKVStoreType = domain::KVStore::new();
         KVStore { kv_store_domain }
     }
 
@@ -23,7 +23,7 @@ impl <'a> KVStore {
         self.kv_store_domain.get(key.into())
     }
 
-    pub fn delete<Tkey: Into<&'a Vec<u8>>>(&mut self, key: Tkey){
+    pub fn delete<Tkey: Into<&'a Vec<u8>>>(&mut self, key: Tkey) {
         self.kv_store_domain.delete(key.into())
     }
 }

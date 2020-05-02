@@ -3,7 +3,7 @@ pub trait MemTable {
     fn set(&mut self, key: Vec<u8>, value: Vec<u8>);
     fn delete(&mut self, key: &Vec<u8>);
     fn get(&self, key: &Vec<u8>) -> Option<&Vec<u8>>;
-    fn sorted_entries(&self) -> Vec<&(Vec<u8>, Vec<u8>)>;
+    fn sorted_entries(&self) -> Vec<(&Vec<u8>, &Vec<u8>)>;
 }
 
 pub struct KVStore<T: MemTable> {

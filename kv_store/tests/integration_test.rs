@@ -21,7 +21,9 @@ fn test_basic() {
 }
 
 #[test]
-fn test_insert_duplicated() {
+fn test_insert_same_key() {
+    // It should return the last element added with a given key
+
     let mut kv: kv_store::KVStore = Default::default();
 
     kv.set("a", "mandarina");
