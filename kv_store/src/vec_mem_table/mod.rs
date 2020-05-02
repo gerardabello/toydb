@@ -15,11 +15,12 @@ impl<Tkey: Ord + Sized, Tvalue: Sized> VecMemTable<Tkey, Tvalue> {
     }
 
     fn delete(&mut self, key: &Tkey) {
-        self.vec.retain(|p| p.0 == *key);
+        self.vec.retain(|p| p.0 != *key);
     }
 
     fn get(&self, key: &Tkey) -> Option<&Tvalue> {
-        let pair = self.vec.iter().find(|&x| x.0 == *key);
+        // As we dont replace existing values, just push, we need to search in reverse
+        let pair = self.vec.iter().rev().find(|&x| x.0 == *key);
         match pair {
             Some(p) => Some(&p.1),
             None => None,

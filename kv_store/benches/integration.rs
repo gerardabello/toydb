@@ -1,6 +1,6 @@
 extern crate rand;
 
-use rand::distributions::Alphanumeric;
+use rand::Rng;
 
 use criterion::{black_box, criterion_group, criterion_main};
 
@@ -32,7 +32,7 @@ fn add_value(c: &mut Criterion) {
 }
 
 fn get_value(c: &mut Criterion) {
-    let rng = rand::thread_rng();
+    let mut rng = rand::thread_rng();
 
     let mut group = c.benchmark_group("get value in filled store");
     for size in [1000, 10000, 100000].iter() {
@@ -60,14 +60,12 @@ fn get_value(c: &mut Criterion) {
 }
 
 fn get_missing_value(c: &mut Criterion) {
-    let mut rng = rand::thread_rng();
-
     let mut group = c.benchmark_group("get missing value in filled store");
     for size in [1000, 10000, 100000].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
             let mut kv: kv_store::KVStore = Default::default();
 
-            for i in 0..size {
+            for _ in 0..size {
                 kv.set(random_bytes(), black_box(random_bytes()));
             }
 
