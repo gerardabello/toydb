@@ -26,6 +26,10 @@ impl<'a> KVStore {
     pub fn delete<Tkey: Into<&'a Vec<u8>>>(&mut self, key: Tkey) {
         self.kv_store_domain.delete(key.into())
     }
+
+    pub fn save_memtable(&mut self) {
+        self.kv_store_domain.save_memtable()
+    }
 }
 
 impl Default for KVStore {

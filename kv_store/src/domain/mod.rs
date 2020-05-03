@@ -1,3 +1,7 @@
+mod lsm_tree;
+
+use std::mem;
+
 pub trait MemTable {
     fn new() -> Self;
     fn set(&mut self, key: Vec<u8>, value: Vec<u8>);
@@ -8,11 +12,15 @@ pub trait MemTable {
 
 pub struct KVStore<T: MemTable> {
     memtable: T,
+    lsm_tree: lsm_tree::LSMTree,
 }
 
-impl<T: MemTable> KVStore<T> {
+impl<T: 'static + MemTable + Send> KVStore<T> {
     pub fn new() -> KVStore<T> {
-        KVStore { memtable: T::new() }
+        KVStore {
+            memtable: T::new(),
+            lsm_tree: lsm_tree::LSMTree::new(),
+        }
     }
 
     pub fn set(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -25,5 +33,11 @@ impl<T: MemTable> KVStore<T> {
 
     pub fn delete(&mut self, key: &Vec<u8>) {
         self.memtable.delete(key)
+    }
+
+    pub fn save_memtable(&mut self) {
+        let memtable = mem::replace(&mut self.memtable, T::new());
+
+        self.lsm_tree.save_memtable(memtable);
     }
 }
