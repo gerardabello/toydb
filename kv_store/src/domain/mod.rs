@@ -19,7 +19,7 @@ impl<T: 'static + MemTable + Send> KVStore<T> {
     pub fn new() -> KVStore<T> {
         KVStore {
             memtable: T::new(),
-            lsm_tree: lsm_tree::LSMTree::new(),
+            lsm_tree: lsm_tree::LSMTree::new("./sstables"),
         }
     }
 
