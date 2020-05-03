@@ -65,11 +65,51 @@ mod tests {
     use super::*;
 
     macro_rules! byte_vec {
-        // `()` indicates that the macro takes no argument.
         ($a: expr) => {
-            // The macro will expand into the contents of this block.
             String::from($a).into_bytes()
         };
+    }
+
+    #[test]
+    fn test_basic() {
+        let mut memtable: VecMemTable<Vec<u8>, Vec<u8>> = VecMemTable::new();
+
+        memtable.set(byte_vec!("a"), byte_vec!("mandarina"));
+        memtable.set(byte_vec!("b"), byte_vec!("platan"));
+
+        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("mandarina")));
+        assert_eq!(memtable.get(&byte_vec!("b")), Some(&byte_vec!("platan")));
+        assert_eq!(memtable.get(&byte_vec!("c")), None);
+    }
+
+    #[test]
+    fn test_insert_same_key() {
+        // It should return the last element added with a given key
+
+        let mut memtable: VecMemTable<Vec<u8>, Vec<u8>> = VecMemTable::new();
+
+        memtable.set(byte_vec!("a"), byte_vec!("mandarina"));
+        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("mandarina")));
+
+        memtable.set(byte_vec!("a"), byte_vec!("platan"));
+        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("platan")));
+
+        memtable.set(byte_vec!("a"), byte_vec!("ana"));
+        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("ana")));
+
+        memtable.set(byte_vec!("a"), byte_vec!("zzz"));
+        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("zzz")));
+    }
+
+    #[test]
+    fn test_delete() {
+        let mut memtable: VecMemTable<Vec<u8>, Vec<u8>> = VecMemTable::new();
+
+        memtable.set(byte_vec!("a"), byte_vec!("mandarina"));
+        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("mandarina")));
+
+        memtable.delete(&byte_vec!("a"));
+        assert_eq!(memtable.get(&byte_vec!("a")), None);
     }
 
     #[test]
