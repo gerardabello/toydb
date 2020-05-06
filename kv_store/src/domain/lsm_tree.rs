@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
-use std::io::{self, BufRead, BufReader, Read};
+use std::io::{self, BufRead, BufReader, Read, SeekFrom};
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -12,28 +12,55 @@ use std::time;
 
 use crate::domain::MemTable;
 
-/*
 fn find_value_in_sstable(path: &str, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
-    find_value(reader, key)
+    find_value(&mut reader, key)
 }
 
-fn find_value(reader : impl Read + Seek, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
-    let mut buffer = [0; 32];
+fn find_value<Tr: Read + Seek>(reader: &mut Tr, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
+    // 256 seams a reasonable nubmber to reserve, although values could be as big as
+    //     u16::max_value()
+    let mut buffer: Vec<u8> = Vec::with_capacity(256);
+    buffer.resize(2, 0);
 
     loop {
-        reader.read_exact(&mut buffer[..8])?;
-        println!("{:?}", buffer);
+        // KEY SIZE
+        reader.read_exact(&mut buffer[..2])?;
+        let mut key_size_bytes = [0u8; 2];
+        key_size_bytes.clone_from_slice(&buffer[..2]);
+        let key_size = u16::from_be_bytes(key_size_bytes);
 
-        if size != 8 {
-            break;
+        //KEY
+        if buffer.len() < key_size as usize {
+            buffer.resize(key_size as usize, 0);
         }
+        reader.read_exact(&mut buffer[..(key_size as usize)])?;
+        let key_read = &buffer[..(key_size as usize)];
+        let key_found = key == key_read;
+
+        // VALUE SIZE
+        reader.read_exact(&mut buffer[..2])?;
+        let mut value_size_bytes = [0u8; 2];
+        value_size_bytes.clone_from_slice(&buffer[..2]);
+        let value_size = u16::from_be_bytes(value_size_bytes);
+
+        if key_found {
+            // VALUE
+            if buffer.len() < value_size as usize {
+                buffer.resize(value_size as usize, 0);
+            }
+            reader.read_exact(&mut buffer[..(value_size as usize)])?;
+            let value = buffer[..(value_size as usize)].to_vec();
+            return Ok(Some(value));
+        }
+
+        // Jump to next key
+        reader.seek(SeekFrom::Current(value_size as i64))?;
     }
 
-    Ok(None)
+    //Ok(None)
 }
-*/
 
 // Max size is 64kB
 fn serialize_size(size: u16) -> [u8; 2] {
@@ -136,6 +163,8 @@ fn save_memtable_thread<T: MemTable + Send + 'static>(
 
 #[cfg(test)]
 mod tests {
+    extern crate rand;
+
     use super::*;
 
     struct MockMemtable {
@@ -186,22 +215,56 @@ mod tests {
             ],
         };
 
-        let test_dir = "./test-tmp-folder";
+        let test_dir = format!("./tmp-{}/", rand::random::<u64>());
 
-        let mut lsm_tree = LSMTree::new(test_dir);
+        let mut lsm_tree = LSMTree::new(&test_dir);
         lsm_tree.save_memtable(memtable);
 
         // Wait for save thread to finish
         thread::sleep(time::Duration::from_millis(1000));
 
         assert_file_contents(
-            "./test-tmp-folder/0.sstable",
+            &format!("{}/0.sstable", test_dir),
             &vec![
                 0, 6, 99, 105, 117, 116, 97, 116, 0, 14, 66, 97, 114, 99, 101, 108, 111, 110, 97,
                 32, 99, 105, 116, 121, 0, 6, 102, 114, 117, 105, 116, 97, 0, 4, 112, 111, 109, 97,
             ],
         );
 
-        fs::remove_dir_all(test_dir);
+        fs::remove_dir_all(test_dir).expect("Remove tmp folder");
+    }
+
+    #[test]
+    fn test_find() {
+        let mut memtable = MockMemtable {
+            vec: vec![
+                (byte_vec!("fruita"), byte_vec!("poma")),
+                (byte_vec!("ciutat"), byte_vec!("Barcelona city")),
+            ],
+        };
+
+        let test_dir = format!("./tmp-{}/", rand::random::<u64>());
+
+        let mut lsm_tree = LSMTree::new(&test_dir);
+        lsm_tree.save_memtable(memtable);
+
+        // Wait for save thread to finish
+        thread::sleep(time::Duration::from_millis(1000));
+
+        assert_eq!(
+            find_value_in_sstable(&format!("{}/0.sstable", test_dir), &byte_vec!("fruita"))
+                .expect("Should return no error")
+                .expect("Value should be found"),
+            byte_vec!("poma")
+        );
+
+        assert_eq!(
+            find_value_in_sstable(&format!("{}/0.sstable", test_dir), &byte_vec!("ciutat"))
+                .expect("Should return no error")
+                .expect("Value should be found"),
+            byte_vec!("Barcelona city")
+        );
+
+        fs::remove_dir_all(test_dir).expect("Remove tmp folder");
     }
 }
