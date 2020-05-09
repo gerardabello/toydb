@@ -8,6 +8,7 @@ macro_rules! byte_vec {
     };
 }
 
+
 #[test]
 fn test_basic() {
     let mut kv: kv_store::KVStore = Default::default();
@@ -15,8 +16,8 @@ fn test_basic() {
     kv.set("a", "mandarina");
     kv.set("b", "platan");
 
-    assert_eq!(kv.get(&byte_vec!("a")), Some(&byte_vec!("mandarina")));
-    assert_eq!(kv.get(&byte_vec!("b")), Some(&byte_vec!("platan")));
+    assert_eq!(kv.get(&byte_vec!("a")), Some(byte_vec!("mandarina")));
+    assert_eq!(kv.get(&byte_vec!("b")), Some(byte_vec!("platan")));
     assert_eq!(kv.get(&byte_vec!("c")), None);
 }
 
@@ -27,16 +28,16 @@ fn test_insert_same_key() {
     let mut kv: kv_store::KVStore = Default::default();
 
     kv.set("a", "mandarina");
-    assert_eq!(kv.get(&byte_vec!("a")), Some(&byte_vec!("mandarina")));
+    assert_eq!(kv.get(&byte_vec!("a")), Some(byte_vec!("mandarina")));
 
     kv.set("a", "platan");
-    assert_eq!(kv.get(&byte_vec!("a")), Some(&byte_vec!("platan")));
+    assert_eq!(kv.get(&byte_vec!("a")), Some(byte_vec!("platan")));
 
     kv.set("a", "ana");
-    assert_eq!(kv.get(&byte_vec!("a")), Some(&byte_vec!("ana")));
+    assert_eq!(kv.get(&byte_vec!("a")), Some(byte_vec!("ana")));
 
     kv.set("a", "zzz");
-    assert_eq!(kv.get(&byte_vec!("a")), Some(&byte_vec!("zzz")));
+    assert_eq!(kv.get(&byte_vec!("a")), Some(byte_vec!("zzz")));
 }
 
 #[test]
@@ -44,7 +45,7 @@ fn test_delete() {
     let mut kv: kv_store::KVStore = Default::default();
 
     kv.set("a", "mandarina");
-    assert_eq!(kv.get(&byte_vec!("a")), Some(&byte_vec!("mandarina")));
+    assert_eq!(kv.get(&byte_vec!("a")), Some(byte_vec!("mandarina")));
 
     kv.delete(&byte_vec!("a"));
     assert_eq!(kv.get(&byte_vec!("a")), None);

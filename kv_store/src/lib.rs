@@ -19,7 +19,7 @@ impl<'a> KVStore {
         self.kv_store_domain.set(key.into(), value.into())
     }
 
-    pub fn get<Tkey: Into<&'a Vec<u8>>>(&self, key: Tkey) -> Option<&Vec<u8>> {
+    pub fn get<Tkey: Into<&'a Vec<u8>>>(&self, key: Tkey) -> Option<Vec<u8>> {
         self.kv_store_domain.get(key.into())
     }
 

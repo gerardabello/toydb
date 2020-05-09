@@ -27,8 +27,12 @@ impl<T: 'static + MemTable + Send + Sync> KVStore<T> {
         self.memtable.set(key, value)
     }
 
-    pub fn get(&self, key: &Vec<u8>) -> Option<&Vec<u8>> {
-        self.memtable.get(key)
+    pub fn get(&self, key: &Vec<u8>) -> Option<Vec<u8>> {
+        if let Some(value) = self.memtable.get(key) {
+            return Some(value.to_vec())
+        };
+
+        self.lsm_tree.get(key)
     }
 
     pub fn delete(&mut self, key: &Vec<u8>) {

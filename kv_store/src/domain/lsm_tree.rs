@@ -17,7 +17,11 @@ use crate::domain::MemTable;
 fn find_value_in_sstable(path: &str, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
-    find_value(&mut reader, key)
+    let result = find_value(&mut reader, key);
+    match result {
+        Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => Ok(None),
+        a => a
+    }
 }
 
 fn find_value<Tr: Read + Seek>(reader: &mut Tr, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
@@ -103,7 +107,7 @@ pub struct LSMTree<T: MemTable + Sync + Send + 'static> {
     // problem.
     sstable_current_index: u32,
 
-    tmp_memtable: Option<Arc<RwLock<T>>>,
+    tmp_memtable: Arc<RwLock<Option<T>>>,
     // List of SSTables saved on disk, order should be the same as order of filenames
     sstables: Arc<RwLock<Vec<SSTable>>>,
 }
@@ -123,7 +127,7 @@ impl<T: MemTable + Sync + Send + 'static> LSMTree<T> {
             sstables: Arc::new(RwLock::new(Vec::new())),
             sstable_dir: dir,
             sstable_current_index: 0,
-            tmp_memtable: None
+            tmp_memtable: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -137,23 +141,51 @@ impl<T: MemTable + Sync + Send + 'static> LSMTree<T> {
     }
 
     pub fn save_memtable(&mut self, memtable: T) {
-        let memtable_lock = Arc::new(RwLock::new(memtable));
-        self.tmp_memtable = Some(memtable_lock.clone());
+        let memtable_lock = Arc::new(RwLock::new(Some(memtable)));
+        self.tmp_memtable = memtable_lock.clone();
 
         let path = self.generate_new_sstable_path();
-        save_memtable_thread(path, self.sstables.clone(), memtable_lock.clone());
+        save_memtable_thread(path, self.sstables.clone(), memtable_lock);
+    }
+
+    pub fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+        let memtable_result = {
+            let memtable = self.tmp_memtable.read().unwrap();
+            match &*memtable {
+                None => None,
+                Some(memtable) => memtable.get(&key.to_vec()).cloned(),
+            }
+        };
+
+        if let Some(result) = memtable_result {
+            return Some(result);
+        };
+
+        let sstables = self.sstables.read().unwrap();
+
+        for sstable in (&*sstables).iter().rev() {
+            if let Some(value) = find_value_in_sstable(&sstable.path, key).unwrap() {
+                return Some(value);
+            }
+        }
+        None
     }
 }
 
 fn save_memtable_thread<T: MemTable + Send + Sync + 'static>(
     path: String,
     sstables: Arc<RwLock<Vec<SSTable>>>,
-    memtable_lock: Arc<RwLock<T>>,
+    memtable_lock: Arc<RwLock<Option<T>>>,
 ) {
     thread::spawn(move || {
-        let memtable = memtable_lock.read().unwrap();
-        let values = memtable.sorted_entries();
-        let serialized = serialize_values(&values);
+        let serialized = {
+            let memtable = memtable_lock.read().unwrap();
+            let values = match &*memtable {
+                Some(memtable) => memtable.sorted_entries(),
+                None => panic!("Should have memtable to save"),
+            };
+            serialize_values(&values)
+        };
 
         let mut file = match File::create(&path) {
             Err(e) => panic!(e),
@@ -164,8 +196,12 @@ fn save_memtable_thread<T: MemTable + Send + Sync + 'static>(
             panic!(e)
         }
 
-        let mut sstables = sstables.write().unwrap();
-        sstables.push(SSTable { path })
+        {
+            let mut sstables = sstables.write().unwrap();
+            let mut memtable = memtable_lock.write().unwrap();
+            sstables.push(SSTable { path });
+            *memtable = None;
+        }
     });
 }
 
@@ -203,11 +239,6 @@ mod tests {
         }
     }
 
-    fn assert_file_contents(path: &str, expected_contents: &[u8]) {
-        let contents = fs::read(path).unwrap();
-        assert_eq!(contents, expected_contents);
-    }
-
     macro_rules! byte_vec {
         ($a: expr) => {
             String::from($a).into_bytes()
@@ -222,8 +253,11 @@ mod tests {
         (lsm_tree, test_dir)
     }
 
-    fn add_sstable_to_tree(lsm_tree: &mut LSMTree<MockMemtable>, values: Vec<(Vec<u8>, Vec<u8>)>) -> () {
-        let mut memtable = MockMemtable { vec: values };
+    fn add_sstable_to_tree(
+        lsm_tree: &mut LSMTree<MockMemtable>,
+        values: Vec<(Vec<u8>, Vec<u8>)>,
+    )  {
+        let memtable = MockMemtable { vec: values };
 
         lsm_tree.save_memtable(memtable);
 
@@ -232,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn test_save() {
+    fn test_save_and_get() {
         let (mut lsm_tree, tmp_dir) = create_lsm_tree_in_tmp_folder();
 
         add_sstable_to_tree(
@@ -243,41 +277,35 @@ mod tests {
             ],
         );
 
-        assert_file_contents(
-            &format!("{}/0.sstable", tmp_dir),
-            &[
-                0, 6, 99, 105, 117, 116, 97, 116, 0, 14, 66, 97, 114, 99, 101, 108, 111, 110, 97,
-                32, 99, 105, 116, 121, 0, 6, 102, 114, 117, 105, 116, 97, 0, 4, 112, 111, 109, 97,
-            ],
-        );
-
-        fs::remove_dir_all(tmp_dir).expect("Remove tmp folder");
-    }
-
-    #[test]
-    fn test_find() {
-        let (mut lsm_tree, tmp_dir) = create_lsm_tree_in_tmp_folder();
-
         add_sstable_to_tree(
             &mut lsm_tree,
             vec![
-                (byte_vec!("fruita"), byte_vec!("poma")),
-                (byte_vec!("ciutat"), byte_vec!("Barcelona city")),
+                (byte_vec!("cotxe"), byte_vec!("Honda")),
+                (byte_vec!("ciutat"), byte_vec!("Mataró city")),
             ],
         );
 
         assert_eq!(
-            find_value_in_sstable(&format!("{}/0.sstable", tmp_dir), &byte_vec!("fruita"))
-                .expect("Should return no error")
+            lsm_tree.get(&byte_vec!("fruita"))
                 .expect("Value should be found"),
             byte_vec!("poma")
         );
 
         assert_eq!(
-            find_value_in_sstable(&format!("{}/0.sstable", tmp_dir), &byte_vec!("ciutat"))
-                .expect("Should return no error")
+            lsm_tree.get(&byte_vec!("ciutat"))
                 .expect("Value should be found"),
-            byte_vec!("Barcelona city")
+            byte_vec!("Mataró city")
+        );
+
+        assert_eq!(
+            lsm_tree.get(&byte_vec!("cotxe"))
+                .expect("Value should be found"),
+            byte_vec!("Honda")
+        );
+
+        assert_eq!(
+            lsm_tree.get(&byte_vec!("mandarina")),
+            None
         );
 
         fs::remove_dir_all(tmp_dir).expect("Remove tmp folder");
