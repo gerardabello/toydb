@@ -8,7 +8,7 @@ use std::panic;
 
 use std::io::{self, BufRead, BufReader, Read, SeekFrom};
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time;
 
@@ -93,7 +93,7 @@ struct SSTable {
     path: String,
 }
 
-pub struct LSMTree {
+pub struct LSMTree<T: MemTable + Sync + Send + 'static> {
     sstable_dir: String,
 
     // Secuential number indicating how many sstables we ATTEPTED to save. As writing to the disk
@@ -103,11 +103,12 @@ pub struct LSMTree {
     // problem.
     sstable_current_index: u32,
 
+    tmp_memtable: Option<Arc<RwLock<T>>>,
     // List of SSTables saved on disk, order should be the same as order of filenames
-    sstables: Arc<Mutex<Vec<SSTable>>>,
+    sstables: Arc<RwLock<Vec<SSTable>>>,
 }
 
-impl LSMTree {
+impl<T: MemTable + Sync + Send + 'static> LSMTree<T> {
     pub fn new(dir: &str) -> Self {
         let dir = String::from(dir);
 
@@ -119,9 +120,10 @@ impl LSMTree {
         }
 
         LSMTree {
-            sstables: Arc::new(Mutex::new(Vec::new())),
+            sstables: Arc::new(RwLock::new(Vec::new())),
             sstable_dir: dir,
             sstable_current_index: 0,
+            tmp_memtable: None
         }
     }
 
@@ -134,18 +136,22 @@ impl LSMTree {
         ret
     }
 
-    pub fn save_memtable<T: MemTable + Send + 'static>(&mut self, memtable: T) {
+    pub fn save_memtable(&mut self, memtable: T) {
+        let memtable_lock = Arc::new(RwLock::new(memtable));
+        self.tmp_memtable = Some(memtable_lock.clone());
+
         let path = self.generate_new_sstable_path();
-        save_memtable_thread(path, self.sstables.clone(), memtable);
+        save_memtable_thread(path, self.sstables.clone(), memtable_lock.clone());
     }
 }
 
-fn save_memtable_thread<T: MemTable + Send + 'static>(
+fn save_memtable_thread<T: MemTable + Send + Sync + 'static>(
     path: String,
-    sstables: Arc<Mutex<Vec<SSTable>>>,
-    memtable: T,
+    sstables: Arc<RwLock<Vec<SSTable>>>,
+    memtable_lock: Arc<RwLock<T>>,
 ) {
     thread::spawn(move || {
+        let memtable = memtable_lock.read().unwrap();
         let values = memtable.sorted_entries();
         let serialized = serialize_values(&values);
 
@@ -158,7 +164,7 @@ fn save_memtable_thread<T: MemTable + Send + 'static>(
             panic!(e)
         }
 
-        let mut sstables = sstables.lock().unwrap();
+        let mut sstables = sstables.write().unwrap();
         sstables.push(SSTable { path })
     });
 }
@@ -208,7 +214,7 @@ mod tests {
         };
     }
 
-    fn create_lsm_tree_in_tmp_folder() -> (LSMTree, String) {
+    fn create_lsm_tree_in_tmp_folder() -> (LSMTree<MockMemtable>, String) {
         let test_dir = format!("./tmp-{}/", rand::random::<u64>());
 
         let lsm_tree = LSMTree::new(&test_dir);
@@ -216,7 +222,7 @@ mod tests {
         (lsm_tree, test_dir)
     }
 
-    fn add_sstable_to_tree(lsm_tree: &mut LSMTree, values: Vec<(Vec<u8>, Vec<u8>)>) -> () {
+    fn add_sstable_to_tree(lsm_tree: &mut LSMTree<MockMemtable>, values: Vec<(Vec<u8>, Vec<u8>)>) -> () {
         let mut memtable = MockMemtable { vec: values };
 
         lsm_tree.save_memtable(memtable);
@@ -250,7 +256,6 @@ mod tests {
 
     #[test]
     fn test_find() {
-
         let (mut lsm_tree, tmp_dir) = create_lsm_tree_in_tmp_folder();
 
         add_sstable_to_tree(

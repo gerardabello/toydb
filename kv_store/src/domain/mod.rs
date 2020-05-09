@@ -10,12 +10,12 @@ pub trait MemTable {
     fn sorted_entries(&self) -> Vec<(&Vec<u8>, &Vec<u8>)>;
 }
 
-pub struct KVStore<T: MemTable> {
+pub struct KVStore<T: MemTable + Sync + Send + 'static> {
     memtable: T,
-    lsm_tree: lsm_tree::LSMTree,
+    lsm_tree: lsm_tree::LSMTree<T>,
 }
 
-impl<T: 'static + MemTable + Send> KVStore<T> {
+impl<T: 'static + MemTable + Send + Sync> KVStore<T> {
     pub fn new() -> KVStore<T> {
         KVStore {
             memtable: T::new(),
