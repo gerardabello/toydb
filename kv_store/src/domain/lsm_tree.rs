@@ -228,6 +228,10 @@ mod tests {
             None
         }
 
+        fn len(&self) -> usize {
+            0
+        }
+
         fn sorted_entries(&self) -> Vec<(&Vec<u8>, &Vec<u8>)> {
             let mut ret = vec![];
             for i in 0..self.vec.len() {

@@ -7,6 +7,7 @@ pub trait MemTable {
     fn set(&mut self, key: Vec<u8>, value: Vec<u8>);
     fn delete(&mut self, key: &Vec<u8>);
     fn get(&self, key: &Vec<u8>) -> Option<&Vec<u8>>;
+    fn len(&self) -> usize;
     fn sorted_entries(&self) -> Vec<(&Vec<u8>, &Vec<u8>)>;
 }
 
@@ -16,20 +17,24 @@ pub struct KVStore<T: MemTable + Sync + Send + 'static> {
 }
 
 impl<T: 'static + MemTable + Send + Sync> KVStore<T> {
-    pub fn new() -> KVStore<T> {
+    pub fn new(dir: &str) -> KVStore<T> {
         KVStore {
             memtable: T::new(),
-            lsm_tree: lsm_tree::LSMTree::new("./sstables"),
+            lsm_tree: lsm_tree::LSMTree::new(dir),
         }
     }
 
     pub fn set(&mut self, key: Vec<u8>, value: Vec<u8>) {
-        self.memtable.set(key, value)
+        self.memtable.set(key, value);
+
+        if self.memtable.len() > 3000 {
+            self.save_memtable();
+        }
     }
 
     pub fn get(&self, key: &Vec<u8>) -> Option<Vec<u8>> {
         if let Some(value) = self.memtable.get(key) {
-            return Some(value.to_vec())
+            return Some(value.to_vec());
         };
 
         self.lsm_tree.get(key)

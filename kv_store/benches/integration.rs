@@ -17,7 +17,7 @@ fn add_value(c: &mut Criterion) {
     let mut group = c.benchmark_group("add value in filled store");
     for size in [1000, 10000, 100000].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-            let mut kv: kv_store::KVStore = Default::default();
+            let mut kv: kv_store::KVStore = kv_store::KVStore::new();
             for _ in 0..size {
                 kv.set(random_bytes(), black_box(random_bytes()));
             }

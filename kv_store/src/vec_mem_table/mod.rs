@@ -58,6 +58,10 @@ impl domain::MemTable for VecMemTable<Vec<u8>, Vec<u8>> {
     fn sorted_entries(&self) -> Vec<(&Vec<u8>, &Vec<u8>)> {
         VecMemTable::sorted_entries(self)
     }
+
+    fn len(&self) -> usize {
+        self.vec.len()
+    }
 }
 
 #[cfg(test)]

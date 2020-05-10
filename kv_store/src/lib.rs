@@ -10,8 +10,8 @@ pub struct KVStore {
 }
 
 impl<'a> KVStore {
-    pub fn new() -> KVStore {
-        let kv_store_domain: DomainKVStoreType = domain::KVStore::new();
+    pub fn new(dir: &str) -> KVStore {
+        let kv_store_domain: DomainKVStoreType = domain::KVStore::new(dir);
         KVStore { kv_store_domain }
     }
 
@@ -29,11 +29,5 @@ impl<'a> KVStore {
 
     pub fn save_memtable(&mut self) {
         self.kv_store_domain.save_memtable()
-    }
-}
-
-impl Default for KVStore {
-    fn default() -> Self {
-        Self::new()
     }
 }

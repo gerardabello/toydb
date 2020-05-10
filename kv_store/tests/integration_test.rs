@@ -11,7 +11,7 @@ macro_rules! byte_vec {
 
 #[test]
 fn test_basic() {
-    let mut kv: kv_store::KVStore = Default::default();
+    let mut kv: kv_store::KVStore = kv_store::KVStore::new();
 
     kv.set("a", "mandarina");
     kv.set("b", "platan");
