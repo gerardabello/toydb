@@ -1,16 +1,13 @@
-use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
-use std::path::Path;
 
 use std::panic;
 
-use std::io::{self, BufRead, BufReader, Read, SeekFrom};
+use std::io::{self, BufReader, Read, SeekFrom};
 
 use std::sync::{Arc, RwLock};
 use std::thread;
-use std::time;
 
 use crate::domain::MemTable;
 
@@ -20,7 +17,7 @@ fn find_value_in_sstable(path: &str, key: &[u8]) -> io::Result<Option<Vec<u8>>> 
     let result = find_value(&mut reader, key);
     match result {
         Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => Ok(None),
-        a => a
+        a => a,
     }
 }
 
@@ -208,6 +205,7 @@ fn save_memtable_thread<T: MemTable + Send + Sync + 'static>(
 #[cfg(test)]
 mod tests {
     extern crate rand;
+    use std::time;
 
     use super::*;
 
@@ -257,10 +255,7 @@ mod tests {
         (lsm_tree, test_dir)
     }
 
-    fn add_sstable_to_tree(
-        lsm_tree: &mut LSMTree<MockMemtable>,
-        values: Vec<(Vec<u8>, Vec<u8>)>,
-    )  {
+    fn add_sstable_to_tree(lsm_tree: &mut LSMTree<MockMemtable>, values: Vec<(Vec<u8>, Vec<u8>)>) {
         let memtable = MockMemtable { vec: values };
 
         lsm_tree.save_memtable(memtable);
@@ -290,27 +285,27 @@ mod tests {
         );
 
         assert_eq!(
-            lsm_tree.get(&byte_vec!("fruita"))
+            lsm_tree
+                .get(&byte_vec!("fruita"))
                 .expect("Value should be found"),
             byte_vec!("poma")
         );
 
         assert_eq!(
-            lsm_tree.get(&byte_vec!("ciutat"))
+            lsm_tree
+                .get(&byte_vec!("ciutat"))
                 .expect("Value should be found"),
             byte_vec!("Mataró city")
         );
 
         assert_eq!(
-            lsm_tree.get(&byte_vec!("cotxe"))
+            lsm_tree
+                .get(&byte_vec!("cotxe"))
                 .expect("Value should be found"),
             byte_vec!("Honda")
         );
 
-        assert_eq!(
-            lsm_tree.get(&byte_vec!("mandarina")),
-            None
-        );
+        assert_eq!(lsm_tree.get(&byte_vec!("mandarina")), None);
 
         fs::remove_dir_all(tmp_dir).expect("Remove tmp folder");
     }
