@@ -15,10 +15,6 @@ impl<Tkey: Ord + Sized, Tvalue: Sized> VecMemTable<Tkey, Tvalue> {
         self.vec.push((key, value));
     }
 
-    fn delete(&mut self, key: &Tkey) {
-        self.vec.retain(|p| p.0 != *key);
-    }
-
     fn get(&self, key: &Tkey) -> Option<&Tvalue> {
         let pair = self.vec.iter().find(|&x| x.0 == *key);
         match pair {
@@ -48,11 +44,19 @@ impl domain::MemTable for VecMemTable<Vec<u8>, Vec<u8>> {
     }
 
     fn delete(&mut self, key: &Vec<u8>) {
-        VecMemTable::delete(self, key)
+        VecMemTable::set(self, key.clone(), domain::TOMBSTONE.to_vec())
     }
 
     fn get(&self, key: &Vec<u8>) -> Option<&Vec<u8>> {
-        VecMemTable::get(self, key)
+        let option = VecMemTable::get(self, key);
+
+        if let Some(val) = option {
+            if val[..] == domain::TOMBSTONE {
+                return None;
+            }
+        }
+
+        option
     }
 
     fn sorted_entries(&self) -> Vec<(&Vec<u8>, &Vec<u8>)> {
@@ -68,77 +72,23 @@ impl domain::MemTable for VecMemTable<Vec<u8>, Vec<u8>> {
 mod tests {
     use super::*;
 
-    macro_rules! byte_vec {
-        ($a: expr) => {
-            String::from($a).into_bytes()
-        };
-    }
-
     #[test]
     fn test_basic() {
-        let mut memtable: VecMemTable<Vec<u8>, Vec<u8>> = VecMemTable::new();
-
-        memtable.set(byte_vec!("a"), byte_vec!("mandarina"));
-        memtable.set(byte_vec!("b"), byte_vec!("platan"));
-
-        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("mandarina")));
-        assert_eq!(memtable.get(&byte_vec!("b")), Some(&byte_vec!("platan")));
-        assert_eq!(memtable.get(&byte_vec!("c")), None);
+        domain::memtable_trait_tests::test_basic(VecMemTable::new());
     }
 
     #[test]
     fn test_insert_same_key() {
-        // It should return the last element added with a given key
-
-        let mut memtable: VecMemTable<Vec<u8>, Vec<u8>> = VecMemTable::new();
-
-        memtable.set(byte_vec!("a"), byte_vec!("mandarina"));
-        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("mandarina")));
-
-        memtable.set(byte_vec!("a"), byte_vec!("platan"));
-        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("platan")));
-
-        memtable.set(byte_vec!("a"), byte_vec!("ana"));
-        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("ana")));
-
-        memtable.set(byte_vec!("a"), byte_vec!("zzz"));
-        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("zzz")));
+        domain::memtable_trait_tests::test_insert_same_key(VecMemTable::new());
     }
 
     #[test]
     fn test_delete() {
-        let mut memtable: VecMemTable<Vec<u8>, Vec<u8>> = VecMemTable::new();
-
-        memtable.set(byte_vec!("a"), byte_vec!("mandarina"));
-        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("mandarina")));
-
-        memtable.delete(&byte_vec!("a"));
-        assert_eq!(memtable.get(&byte_vec!("a")), None);
+        domain::memtable_trait_tests::test_delete(VecMemTable::new());
     }
 
     #[test]
     fn test_sorted_entries() {
-        let mut memtable: VecMemTable<Vec<u8>, Vec<u8>> = VecMemTable::new();
-
-        memtable.set(byte_vec!("a"), byte_vec!("mandarina"));
-        memtable.delete(&byte_vec!("a"));
-
-        memtable.set(byte_vec!("b"), byte_vec!("yyyy"));
-        memtable.set(byte_vec!("b"), byte_vec!("zzzz"));
-        memtable.set(byte_vec!("d"), byte_vec!("ana"));
-        memtable.set(vec![1, 2, 3], byte_vec!("3 numeros"));
-        memtable.set(vec![2, 3], byte_vec!("2 numeros"));
-        memtable.set(vec![99, 3], byte_vec!("la c"));
-
-        assert_eq!(
-            memtable.sorted_entries(),
-            vec![
-                (&vec![1, 2, 3], &byte_vec!("3 numeros")),
-                (&vec![2, 3], &byte_vec!("2 numeros")),
-                (&byte_vec!("b"), &byte_vec!("zzzz")),
-                (&vec![99, 3], &byte_vec!("la c")),
-                (&byte_vec!("d"), &byte_vec!("ana")),
-            ]
-        );
+        domain::memtable_trait_tests::test_sorted_entries(VecMemTable::new());
     }
 }
