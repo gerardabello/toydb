@@ -12,7 +12,7 @@ use std::thread;
 use crate::domain::MemTable;
 
 #[cfg(test)]
-mod lsm_tree_test;
+mod test;
 
 fn find_value_in_sstable(path: &str, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
     let file = File::open(path)?;
@@ -97,7 +97,7 @@ struct SSTable {
     path: String,
 }
 
-pub struct LSMTree<T: MemTable + Sync + Send + 'static> {
+pub struct LSMTree<T: MemTable> {
     sstable_dir: String,
 
     // Secuential number indicating how many sstables we ATTEPTED to save. As writing to the disk
@@ -112,7 +112,7 @@ pub struct LSMTree<T: MemTable + Sync + Send + 'static> {
     sstables: Arc<RwLock<Vec<SSTable>>>,
 }
 
-impl<T: MemTable + Sync + Send + 'static> LSMTree<T> {
+impl<T: MemTable> LSMTree<T> {
     pub fn new(dir: &str) -> Self {
         let dir = String::from(dir);
 

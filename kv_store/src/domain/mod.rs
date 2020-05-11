@@ -2,7 +2,7 @@ mod lsm_tree;
 
 use std::mem;
 
-pub trait MemTable {
+pub trait MemTable : 'static  + Sync + Send {
     fn new() -> Self;
     fn set(&mut self, key: Vec<u8>, value: Vec<u8>);
     fn delete(&mut self, key: &Vec<u8>);
@@ -11,12 +11,12 @@ pub trait MemTable {
     fn sorted_entries(&self) -> Vec<(&Vec<u8>, &Vec<u8>)>;
 }
 
-pub struct KVStore<T: MemTable + Sync + Send + 'static> {
+pub struct KVStore<T: MemTable> {
     memtable: T,
     lsm_tree: lsm_tree::LSMTree<T>,
 }
 
-impl<T: 'static + MemTable + Send + Sync> KVStore<T> {
+impl<T: MemTable> KVStore<T> {
     pub fn new(dir: &str) -> KVStore<T> {
         KVStore {
             memtable: T::new(),

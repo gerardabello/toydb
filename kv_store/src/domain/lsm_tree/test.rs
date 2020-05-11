@@ -12,11 +12,11 @@ impl MemTable for MockMemtable {
         MockMemtable { vec: vec![] }
     }
 
-    fn set(&mut self, key: Vec<u8>, value: Vec<u8>) {}
+    fn set(&mut self, _key: Vec<u8>, _value: Vec<u8>) {}
 
-    fn delete(&mut self, key: &Vec<u8>) {}
+    fn delete(&mut self, _key: &Vec<u8>) {}
 
-    fn get(&self, key: &Vec<u8>) -> Option<&Vec<u8>> {
+    fn get(&self, _key: &Vec<u8>) -> Option<&Vec<u8>> {
         None
     }
 
