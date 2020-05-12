@@ -204,4 +204,3 @@ fn save_memtable_thread<T: MemTable + Send + Sync + 'static>(
         }
     });
 }
-

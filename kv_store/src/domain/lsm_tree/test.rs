@@ -3,6 +3,7 @@ use std::time;
 
 use super::*;
 
+#[derive(Debug)]
 struct MockMemtable {
     vec: Vec<(Vec<u8>, Vec<u8>)>,
 }

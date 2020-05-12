@@ -1,6 +1,6 @@
 use crate::domain;
 
-/* TODO replace this with a RBTree-based memtable */
+#[derive(Debug)]
 pub struct VecMemTable<Tkey: Ord + Sized, Tvalue: Sized> {
     vec: Vec<(Tkey, Tvalue)>,
 }
@@ -44,15 +44,7 @@ impl domain::MemTable for VecMemTable<Vec<u8>, Vec<u8>> {
     }
 
     fn get(&self, key: &Vec<u8>) -> Option<&Vec<u8>> {
-        let option = VecMemTable::get(self, key);
-
-        if let Some(val) = option {
-            if val[..] == domain::TOMBSTONE {
-                return None;
-            }
-        }
-
-        option
+        VecMemTable::get(self, key)
     }
 
     fn sorted_entries(&self) -> Vec<(&Vec<u8>, &Vec<u8>)> {
