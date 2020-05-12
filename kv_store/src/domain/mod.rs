@@ -10,7 +10,6 @@ pub const TOMBSTONE: [u8; 32] = [
 pub trait MemTable: 'static + Sync + Send {
     fn new() -> Self;
     fn set(&mut self, key: Vec<u8>, value: Vec<u8>);
-    fn delete(&mut self, key: &Vec<u8>);
     fn get(&self, key: &Vec<u8>) -> Option<&Vec<u8>>;
     fn len(&self) -> usize;
     fn sorted_entries(&self) -> Vec<(&Vec<u8>, &Vec<u8>)>;
@@ -38,15 +37,29 @@ impl<T: MemTable> KVStore<T> {
     }
 
     pub fn get(&self, key: &Vec<u8>) -> Option<Vec<u8>> {
-        if let Some(value) = self.memtable.get(key) {
-            return Some(value.to_vec());
-        };
-
-        self.lsm_tree.get(key)
+        match self.memtable.get(key) {
+            Some(v) => {
+                if v[..] == TOMBSTONE {
+                    None
+                } else {
+                    Some(v.to_vec())
+                }
+            }
+            None => match self.lsm_tree.get(key) {
+                Some(v) => {
+                    if v[..] == TOMBSTONE {
+                        None
+                    } else {
+                        Some(v)
+                    }
+                }
+                None => None,
+            },
+        }
     }
 
     pub fn delete(&mut self, key: &Vec<u8>) {
-        self.memtable.delete(key)
+        self.set(key.to_vec(), TOMBSTONE.to_vec())
     }
 
     pub fn save_memtable(&mut self) {
@@ -91,17 +104,9 @@ pub(crate) mod memtable_trait_tests {
         assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("zzz")));
     }
 
-    pub fn test_delete<T: MemTable>(mut memtable: T) {
-        memtable.set(byte_vec!("a"), byte_vec!("mandarina"));
-        assert_eq!(memtable.get(&byte_vec!("a")), Some(&byte_vec!("mandarina")));
-
-        memtable.delete(&byte_vec!("a"));
-        assert_eq!(memtable.get(&byte_vec!("a")), None);
-    }
-
     pub fn test_sorted_entries<T: MemTable>(mut memtable: T) {
         memtable.set(byte_vec!("a"), byte_vec!("mandarina"));
-        memtable.delete(&byte_vec!("a"));
+        memtable.set(byte_vec!("a"), TOMBSTONE.to_vec());
 
         memtable.set(byte_vec!("b"), byte_vec!("yyyy"));
         memtable.set(byte_vec!("b"), byte_vec!("zzzz"));

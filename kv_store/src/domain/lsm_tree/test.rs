@@ -14,8 +14,6 @@ impl MemTable for MockMemtable {
 
     fn set(&mut self, _key: Vec<u8>, _value: Vec<u8>) {}
 
-    fn delete(&mut self, _key: &Vec<u8>) {}
-
     fn get(&self, _key: &Vec<u8>) -> Option<&Vec<u8>> {
         None
     }

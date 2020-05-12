@@ -43,10 +43,6 @@ impl domain::MemTable for VecMemTable<Vec<u8>, Vec<u8>> {
         VecMemTable::set(self, key, value)
     }
 
-    fn delete(&mut self, key: &Vec<u8>) {
-        VecMemTable::set(self, key.clone(), domain::TOMBSTONE.to_vec())
-    }
-
     fn get(&self, key: &Vec<u8>) -> Option<&Vec<u8>> {
         let option = VecMemTable::get(self, key);
 
@@ -80,11 +76,6 @@ mod tests {
     #[test]
     fn test_insert_same_key() {
         domain::memtable_trait_tests::test_insert_same_key(VecMemTable::new());
-    }
-
-    #[test]
-    fn test_delete() {
-        domain::memtable_trait_tests::test_delete(VecMemTable::new());
     }
 
     #[test]
