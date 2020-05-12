@@ -116,24 +116,41 @@ impl<T: MemTable> LSMTree<T> {
     pub fn new(dir: &str) -> Self {
         let dir = String::from(dir);
 
-        if let Err(error) = fs::create_dir(&dir) {
-            match error.kind() {
-                std::io::ErrorKind::AlreadyExists => println!("sstable folder already exists"),
-                _ => panic!(error),
-            }
-        }
-
-        LSMTree {
+        let mut ret = LSMTree {
             sstables: Arc::new(RwLock::new(Vec::new())),
-            sstable_dir: dir,
+            sstable_dir: dir.clone(),
             sstable_current_index: 0,
             tmp_memtable: Arc::new(RwLock::new(None)),
+        };
+
+        if let Err(error) = fs::create_dir(&dir) {
+            match error.kind() {
+                std::io::ErrorKind::AlreadyExists => {
+                    let mut paths : Vec<String> = fs::read_dir(&dir).unwrap().map(|path| path.unwrap().path().to_str().unwrap().to_owned()).collect();
+                    paths.sort();
+
+                    println!("sstable folder already exists, loading data");
+                    {
+                        let mut sstables = ret.sstables.write().unwrap();
+                        for path in paths {
+                            println!("Found sstable: {}", path);
+                            sstables.push(SSTable { path });
+                        }
+                        ret.sstable_current_index = sstables.len() as u32;
+                    }
+                    println!("stored data loaded");
+
+                }
+                _ => panic!(error),
+            };
         }
+
+        ret
     }
 
     fn generate_new_sstable_path(&mut self) -> String {
         let ret = format!(
-            "{}/{}.sstable",
+            "{}/{:08}.sstable",
             self.sstable_dir, self.sstable_current_index
         );
         self.sstable_current_index += 1;
