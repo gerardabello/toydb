@@ -2,6 +2,13 @@ mod lsm_tree;
 
 use std::mem;
 
+// Value used to describe a deleted element. As this KVStore is made of multiple layers, where the
+// newest one overwrites the oldest one, deleting an element by removing it would not work
+// correctly, as it would simply continue searching an return an old value.
+// The solution is to use a random value we call TOOMBSTONE. Instead of deleting we set the key
+// value to TOOMBSTONE. Lower level structs just save it as a regular value, but the KVStore
+// returns None if it finds it in "get", and stops searching.
+//
 pub const TOMBSTONE: [u8; 32] = [
     179, 210, 155, 16, 110, 229, 104, 202, 72, 124, 209, 13, 85, 192, 56, 71, 239, 10, 116, 199,
     186, 205, 163, 143, 3, 43, 125, 16, 157, 22, 47, 244,
