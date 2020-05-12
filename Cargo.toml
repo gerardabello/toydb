@@ -1,6 +1,7 @@
 [workspace]
 members = [
-  "kv_store"
+  "kv_store",
+  "kv_store/benchmarks"
 ]
 
 [package]

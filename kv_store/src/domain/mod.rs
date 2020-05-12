@@ -14,7 +14,7 @@ pub const TOMBSTONE: [u8; 32] = [
     186, 205, 163, 143, 3, 43, 125, 16, 157, 22, 47, 244,
 ];
 
-pub trait MemTable: 'static + Sync + Send + std::fmt::Debug{
+pub trait MemTable: 'static + Sync + Send + std::fmt::Debug {
     fn new() -> Self;
     fn set(&mut self, key: Vec<u8>, value: Vec<u8>);
     fn get(&self, key: &Vec<u8>) -> Option<&Vec<u8>>;
@@ -60,9 +60,7 @@ impl<T: MemTable> KVStore<T> {
                         Some(v)
                     }
                 }
-                None => {
-                    None
-                }
+                None => None,
             },
         }
     }
