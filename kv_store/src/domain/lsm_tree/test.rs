@@ -12,14 +12,21 @@ impl MemTable for MockMemtable {
         MockMemtable { vec: vec![] }
     }
 
-    fn set(&mut self, _key: Vec<u8>, _value: Vec<u8>) {}
+    fn set(&mut self, key: Vec<u8>, value: Vec<u8>) {
+        self.vec.retain(|p| p.0 != key);
+        self.vec.push((key, value));
+    }
 
-    fn get(&self, _key: &Vec<u8>) -> Option<&Vec<u8>> {
-        None
+    fn get(&self, key: &Vec<u8>) -> Option<&Vec<u8>> {
+        let pair = self.vec.iter().find(|&x| x.0 == *key);
+        match pair {
+            Some(p) => Some(&p.1),
+            None => None,
+        }
     }
 
     fn len(&self) -> usize {
-        0
+        self.vec.len()
     }
 
     fn sorted_entries(&self) -> Vec<(&Vec<u8>, &Vec<u8>)> {
@@ -51,9 +58,6 @@ fn add_sstable_to_tree(lsm_tree: &mut LSMTree<MockMemtable>, values: Vec<(Vec<u8
     let memtable = MockMemtable { vec: values };
 
     lsm_tree.save_memtable(memtable);
-
-    // Wait for save thread to finish
-    lsm_tree.wait_for_threads();
 }
 
 #[test]
@@ -63,11 +67,49 @@ fn test_save_and_get() {
     add_sstable_to_tree(
         &mut lsm_tree,
         vec![
+            (byte_vec!("a"), byte_vec!("a")),
+            (byte_vec!("1"), byte_vec!("1")),
+            (byte_vec!("fruita"), byte_vec!("poma")),
+            (byte_vec!("ciutat"), byte_vec!("Barcelona city")),
+            (byte_vec!("2"), byte_vec!("2")),
+            (byte_vec!("3"), byte_vec!("3")),
+        ],
+    );
+
+    dbg!("Getting value fruita");
+    assert_eq!(
+        lsm_tree
+            .get(&byte_vec!("fruita"))
+            .expect("Value should be found"),
+        byte_vec!("poma")
+    );
+
+    assert_eq!(
+        lsm_tree
+            .get(&byte_vec!("ciutat"))
+            .expect("Value should be found"),
+        byte_vec!("Barcelona city")
+    );
+
+    assert_eq!(lsm_tree.get(&byte_vec!("mandarina")), None);
+
+    std::mem::drop(lsm_tree);
+
+    fs::remove_dir_all(tmp_dir).expect("Remove tmp folder");
+}
+
+#[test]
+fn test_save_waits_for_previous_save() {
+    let (mut lsm_tree, tmp_dir) = create_lsm_tree_in_tmp_folder();
+
+    add_sstable_to_tree(
+        &mut lsm_tree,
+        vec![
             (byte_vec!("fruita"), byte_vec!("poma")),
             (byte_vec!("ciutat"), byte_vec!("Barcelona city")),
         ],
     );
-
+    // This should wait for the previous save to finish.
     add_sstable_to_tree(
         &mut lsm_tree,
         vec![
@@ -99,5 +141,8 @@ fn test_save_and_get() {
 
     assert_eq!(lsm_tree.get(&byte_vec!("mandarina")), None);
 
+    std::mem::drop(lsm_tree);
+
     fs::remove_dir_all(tmp_dir).expect("Remove tmp folder");
 }
+

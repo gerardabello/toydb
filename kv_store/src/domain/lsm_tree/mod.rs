@@ -97,6 +97,8 @@ impl<T: MemTable> LSMTree<T> {
     }
 
     pub fn save_memtable(&mut self, memtable: T) {
+        self.wait_for_threads();
+
         let memtable_lock = Arc::new(RwLock::new(Some(memtable)));
         self.tmp_memtable = memtable_lock.clone();
 
@@ -123,8 +125,12 @@ impl<T: MemTable> LSMTree<T> {
         let memtable_result = {
             let memtable = self.tmp_memtable.read().unwrap();
             match &*memtable {
-                None => None,
-                Some(memtable) => memtable.get(&key.to_vec()).cloned(),
+                None => {
+                    None
+                }
+                Some(memtable) => {
+                    memtable.get(&key.to_vec()).cloned()
+                }
             }
         };
 
@@ -184,3 +190,17 @@ fn save_memtable_thread<T: MemTable + Send + Sync + 'static>(
         }
     })
 }
+/*
+
+fn merge_sstables_thread(
+    sstables: Arc<RwLock<Vec<SSTable>>>,
+    sstables_to_merge: Vec<SSTable>,
+) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        let mut sstables = sstables.write().unwrap();
+        let mut memtable = memtable_lock.write().unwrap();
+        sstables.push(SSTable { path });
+        *memtable = None;
+    })
+}
+*/
