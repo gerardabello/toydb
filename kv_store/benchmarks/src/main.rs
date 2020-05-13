@@ -63,7 +63,7 @@ fn benchmark_kv_store(
     benchmark(&mut benchmark_results, name, || {
         f(&mut kv);
     });
-    kv.wait_for_threads();
+    std::mem::drop(kv);
     fs::remove_dir_all(TMP_DIR).expect("Remove tmp folder");
 }
 
@@ -78,7 +78,7 @@ fn benchmark_kv_store_with_setup(
     benchmark(&mut benchmark_results, name, || {
         f(&mut kv);
     });
-    kv.wait_for_threads();
+    std::mem::drop(kv);
     fs::remove_dir_all(TMP_DIR).expect("Remove tmp folder");
 }
 
@@ -262,9 +262,6 @@ fn main() {
             },
         );
     }
-
-    benchmark_results.save_memtable();
-    benchmark_results.wait_for_threads();
 }
 
 /*

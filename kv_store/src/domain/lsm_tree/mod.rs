@@ -173,7 +173,7 @@ impl<T: MemTable> LSMTree<T> {
         ));
     }
 
-    pub fn wait_for_threads(&mut self) {
+    fn wait_for_threads(&mut self) {
         let handle_opt = std::mem::replace(&mut self.save_tmp_table_handle, None);
 
         if let Some(handle) = handle_opt {
@@ -208,6 +208,13 @@ impl<T: MemTable> LSMTree<T> {
     }
 }
 
+impl<T: MemTable> Drop for LSMTree<T> {
+    fn drop(&mut self) {
+        self.wait_for_threads();
+    }
+}
+
+
 fn save_memtable_thread<T: MemTable + Send + Sync + 'static>(
     path: String,
     sstables: Arc<RwLock<Vec<SSTable>>>,
@@ -224,7 +231,10 @@ fn save_memtable_thread<T: MemTable + Send + Sync + 'static>(
         };
 
         let mut file = match File::create(&path) {
-            Err(e) => panic!(e),
+            Err(e) => {
+                println!("{:?}", e);
+                panic!(e);
+            },
             Ok(file) => file,
         };
 

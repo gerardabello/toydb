@@ -74,9 +74,11 @@ impl<T: MemTable> KVStore<T> {
 
         self.lsm_tree.save_memtable(memtable);
     }
+}
 
-    pub fn wait_for_threads(&mut self) {
-        self.lsm_tree.wait_for_threads();
+impl<T: MemTable> Drop for KVStore<T> {
+    fn drop(&mut self) {
+        self.save_memtable();
     }
 }
 
