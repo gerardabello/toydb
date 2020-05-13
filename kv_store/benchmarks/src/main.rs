@@ -60,9 +60,10 @@ fn benchmark_kv_store(
     f: fn(&mut kv_store::KVStore) -> (),
 ) {
     let mut kv: kv_store::KVStore = kv_store::KVStore::new(TMP_DIR);
-    benchmark(&mut benchmark_results, name, move || {
+    benchmark(&mut benchmark_results, name, || {
         f(&mut kv);
     });
+    kv.wait_for_threads();
     fs::remove_dir_all(TMP_DIR).expect("Remove tmp folder");
 }
 
@@ -74,9 +75,10 @@ fn benchmark_kv_store_with_setup(
 ) {
     let mut kv: kv_store::KVStore = kv_store::KVStore::new(TMP_DIR);
     setup_f(&mut kv);
-    benchmark(&mut benchmark_results, name, move || {
+    benchmark(&mut benchmark_results, name, || {
         f(&mut kv);
     });
+    kv.wait_for_threads();
     fs::remove_dir_all(TMP_DIR).expect("Remove tmp folder");
 }
 
@@ -262,7 +264,7 @@ fn main() {
     }
 
     benchmark_results.save_memtable();
-    thread::sleep(Duration::from_secs(1));
+    benchmark_results.wait_for_threads();
 }
 
 /*

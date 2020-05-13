@@ -74,6 +74,10 @@ impl<T: MemTable> KVStore<T> {
 
         self.lsm_tree.save_memtable(memtable);
     }
+
+    pub fn wait_for_threads(&mut self) {
+        self.lsm_tree.wait_for_threads();
+    }
 }
 
 #[cfg(test)]

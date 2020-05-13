@@ -110,6 +110,7 @@ pub struct LSMTree<T: MemTable> {
     tmp_memtable: Arc<RwLock<Option<T>>>,
     // List of SSTables saved on disk, order should be the same as order of filenames
     sstables: Arc<RwLock<Vec<SSTable>>>,
+    save_tmp_table_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl<T: MemTable> LSMTree<T> {
@@ -121,12 +122,16 @@ impl<T: MemTable> LSMTree<T> {
             sstable_dir: dir.clone(),
             sstable_current_index: 0,
             tmp_memtable: Arc::new(RwLock::new(None)),
+            save_tmp_table_handle: None,
         };
 
         if let Err(error) = fs::create_dir(&dir) {
             match error.kind() {
                 std::io::ErrorKind::AlreadyExists => {
-                    let mut paths : Vec<String> = fs::read_dir(&dir).unwrap().map(|path| path.unwrap().path().to_str().unwrap().to_owned()).collect();
+                    let mut paths: Vec<String> = fs::read_dir(&dir)
+                        .unwrap()
+                        .map(|path| path.unwrap().path().to_str().unwrap().to_owned())
+                        .collect();
                     paths.sort();
 
                     println!("sstable folder already exists, loading data");
@@ -139,7 +144,6 @@ impl<T: MemTable> LSMTree<T> {
                         ret.sstable_current_index = sstables.len() as u32;
                     }
                     println!("stored data loaded");
-
                 }
                 _ => panic!(error),
             };
@@ -162,7 +166,22 @@ impl<T: MemTable> LSMTree<T> {
         self.tmp_memtable = memtable_lock.clone();
 
         let path = self.generate_new_sstable_path();
-        save_memtable_thread(path, self.sstables.clone(), memtable_lock);
+        self.save_tmp_table_handle = Some(save_memtable_thread(
+            path,
+            self.sstables.clone(),
+            memtable_lock,
+        ));
+    }
+
+    pub fn wait_for_threads(&mut self) {
+        let handle_opt = std::mem::replace(&mut self.save_tmp_table_handle, None);
+
+        if let Some(handle) = handle_opt {
+            let result = handle.join();
+            if let Err(e) = result {
+                println!("Error in save memtable thread: {:?}", e);
+            }
+        }
     }
 
     pub fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -193,7 +212,7 @@ fn save_memtable_thread<T: MemTable + Send + Sync + 'static>(
     path: String,
     sstables: Arc<RwLock<Vec<SSTable>>>,
     memtable_lock: Arc<RwLock<Option<T>>>,
-) {
+) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let serialized = {
             let memtable = memtable_lock.read().unwrap();
@@ -219,5 +238,5 @@ fn save_memtable_thread<T: MemTable + Send + Sync + 'static>(
             sstables.push(SSTable { path });
             *memtable = None;
         }
-    });
+    })
 }

@@ -30,4 +30,8 @@ impl<'a> KVStore {
     pub fn save_memtable(&mut self) {
         self.kv_store_domain.save_memtable()
     }
+
+    pub fn wait_for_threads(&mut self) {
+        self.kv_store_domain.wait_for_threads()
+    }
 }
