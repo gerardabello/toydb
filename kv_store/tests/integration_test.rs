@@ -56,7 +56,7 @@ fn test_basic_while_saving_memtable() {
     assert_eq!(kv.get(&byte_vec!("b")), Some(byte_vec!("platan")));
     assert_eq!(kv.get(&byte_vec!("c")), None);
 
-    thread::sleep(time::Duration::from_millis(1000));
+    kv.wait_for_threads();
 
     // Test after memtable is on disk
     assert_eq!(kv.get(&byte_vec!("a")), Some(byte_vec!("mandarina")));
@@ -83,7 +83,7 @@ fn test_delete_after_saving_memtable() {
     assert_eq!(kv.get(&byte_vec!("b")), Some(byte_vec!("platan")));
     assert_eq!(kv.get(&byte_vec!("c")), None);
 
-    thread::sleep(time::Duration::from_millis(1000));
+    kv.wait_for_threads();
 
     // Test after memtable is on disk
     assert_eq!(kv.get(&byte_vec!("a")), Some(byte_vec!("mandarina")));

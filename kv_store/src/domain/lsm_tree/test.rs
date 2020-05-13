@@ -54,7 +54,7 @@ fn add_sstable_to_tree(lsm_tree: &mut LSMTree<MockMemtable>, values: Vec<(Vec<u8
     lsm_tree.save_memtable(memtable);
 
     // Wait for save thread to finish
-    thread::sleep(time::Duration::from_millis(1000));
+    lsm_tree.wait_for_threads();
 }
 
 #[test]
