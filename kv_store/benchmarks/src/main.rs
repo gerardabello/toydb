@@ -97,12 +97,14 @@ fn serialize_string(s: &str) -> Vec<u8> {
     String::from(s).into_bytes()
 }
 
+/*
 fn deserialize_string(bytes: &[u8]) -> &str {
     std::str::from_utf8(bytes).unwrap()
 }
+*/
 
 fn main() {
-    fs::remove_dir_all(TMP_DIR);
+    let _ = fs::remove_dir_all(TMP_DIR);
     let mut benchmark_results: kv_store::KVStore = kv_store::KVStore::new("./previous_benchmarks");
 
     benchmark_kv_store(

@@ -1,8 +1,9 @@
 mod domain;
 mod vec_mem_table;
+mod hashmap_mem_table;
 //mod sstable;
 
-type MemTableType = vec_mem_table::VecMemTable<Vec<u8>, Vec<u8>>;
+type MemTableType = hashmap_mem_table::HashMapMemTable<Vec<u8>, Vec<u8>>;
 type DomainKVStoreType = domain::KVStore<MemTableType>;
 
 pub struct KVStore {
