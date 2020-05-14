@@ -98,6 +98,7 @@ fn test_save_and_get() {
     fs::remove_dir_all(tmp_dir).expect("Remove tmp folder");
 }
 
+
 #[test]
 fn test_save_waits_for_previous_save() {
     let (mut lsm_tree, tmp_dir) = create_lsm_tree_in_tmp_folder();
@@ -146,3 +147,153 @@ fn test_save_waits_for_previous_save() {
     fs::remove_dir_all(tmp_dir).expect("Remove tmp folder");
 }
 
+
+
+
+#[test]
+fn test_merge_tables_while_saving() {
+    let (mut lsm_tree, tmp_dir) = create_lsm_tree_in_tmp_folder();
+
+    add_sstable_to_tree(
+        &mut lsm_tree,
+        vec![
+            (byte_vec!("fruita"), byte_vec!("poma")),
+            (byte_vec!("nom"), byte_vec!("Gerard")),
+            (byte_vec!("ciutat"), byte_vec!("Barcelona city")),
+        ],
+    );
+    add_sstable_to_tree(
+        &mut lsm_tree,
+        vec![
+            (byte_vec!("cotxe"), byte_vec!("Honda")),
+            (byte_vec!("ciutat"), byte_vec!("Mataró city")),
+        ],
+    );
+    add_sstable_to_tree(
+        &mut lsm_tree,
+        vec![
+            (byte_vec!("fruita"), byte_vec!("mandarina")),
+            (byte_vec!("ciutat"), byte_vec!("Sabadell")),
+        ],
+    );
+    lsm_tree.merge_sstables();
+
+    lsm_tree.wait_for_threads();
+
+    // As we called merge_sstables just before saving one, only the committed ones (first two) will
+    // actually be merged, so we would end up with the merged table and the newest one.
+    assert_eq!(
+        lsm_tree.len(),
+        2
+    );
+
+    assert_eq!(
+        lsm_tree
+            .get(&byte_vec!("fruita"))
+            .expect("Value should be found"),
+        byte_vec!("mandarina")
+    );
+
+    assert_eq!(
+        lsm_tree
+            .get(&byte_vec!("ciutat"))
+            .expect("Value should be found"),
+        byte_vec!("Sabadell")
+    );
+
+    assert_eq!(
+        lsm_tree
+            .get(&byte_vec!("cotxe"))
+            .expect("Value should be found"),
+        byte_vec!("Honda")
+    );
+
+    assert_eq!(
+        lsm_tree
+            .get(&byte_vec!("nom"))
+            .expect("Value should be found"),
+        byte_vec!("Gerard")
+    );
+
+    assert_eq!(lsm_tree.get(&byte_vec!("coffee")), None);
+
+    std::mem::drop(lsm_tree);
+
+    //fs::remove_dir_all(tmp_dir).expect("Remove tmp folder");
+}
+
+#[test]
+fn test_merge_tables_while_not_saving() {
+    let (mut lsm_tree, tmp_dir) = create_lsm_tree_in_tmp_folder();
+
+    add_sstable_to_tree(
+        &mut lsm_tree,
+        vec![
+            (byte_vec!("fruita"), byte_vec!("poma")),
+            (byte_vec!("nom"), byte_vec!("Gerard")),
+            (byte_vec!("ciutat"), byte_vec!("Barcelona city")),
+        ],
+    );
+    add_sstable_to_tree(
+        &mut lsm_tree,
+        vec![
+            (byte_vec!("cotxe"), byte_vec!("Honda")),
+            (byte_vec!("ciutat"), byte_vec!("Mataró city")),
+        ],
+    );
+
+    lsm_tree.wait_for_threads();
+
+    lsm_tree.merge_sstables();
+
+    lsm_tree.wait_for_threads();
+
+    add_sstable_to_tree(
+        &mut lsm_tree,
+        vec![
+            (byte_vec!("fruita"), byte_vec!("mandarina")),
+            (byte_vec!("ciutat"), byte_vec!("Sabadell")),
+        ],
+    );
+
+    // As we called merge_sstables just before saving one, only the committed ones (first two) will
+    // actually be merged, so we would end up with the merged table and the newest one.
+    assert_eq!(
+        lsm_tree.len(),
+        1
+    );
+
+    assert_eq!(
+        lsm_tree
+            .get(&byte_vec!("fruita"))
+            .expect("Value should be found"),
+        byte_vec!("mandarina")
+    );
+
+    assert_eq!(
+        lsm_tree
+            .get(&byte_vec!("ciutat"))
+            .expect("Value should be found"),
+        byte_vec!("Sabadell")
+    );
+
+    assert_eq!(
+        lsm_tree
+            .get(&byte_vec!("cotxe"))
+            .expect("Value should be found"),
+        byte_vec!("Honda")
+    );
+
+    assert_eq!(
+        lsm_tree
+            .get(&byte_vec!("nom"))
+            .expect("Value should be found"),
+        byte_vec!("Gerard")
+    );
+
+    assert_eq!(lsm_tree.get(&byte_vec!("coffee")), None);
+
+    std::mem::drop(lsm_tree);
+
+    fs::remove_dir_all(tmp_dir).expect("Remove tmp folder");
+}

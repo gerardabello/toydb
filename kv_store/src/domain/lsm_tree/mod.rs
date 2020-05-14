@@ -17,6 +17,7 @@ use crate::domain::MemTable;
 #[cfg(test)]
 mod test;
 
+#[derive(Debug)]
 struct SSTable {
     path: String,
 }
@@ -34,6 +35,11 @@ impl SSTable {
             Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => Ok(None),
             a => a,
         }
+    }
+
+    fn delete(self) -> io::Result<()> {
+        fs::remove_file(self.path)?;
+        Ok(())
     }
 }
 
@@ -64,6 +70,7 @@ pub struct LSMTree<T: MemTable> {
     // List of SSTables saved on disk, order should be the same as order of filenames
     sstables: Arc<RwLock<Vec<SSTable>>>,
     save_tmp_table_handle: Option<thread::JoinHandle<()>>,
+    merge_tables_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl<T: MemTable> LSMTree<T> {
@@ -76,6 +83,7 @@ impl<T: MemTable> LSMTree<T> {
             sstable_current_index: 0,
             tmp_memtable: Arc::new(RwLock::new(None)),
             save_tmp_table_handle: None,
+            merge_tables_handle: None,
         };
 
         if let Err(error) = fs::create_dir(&dir) {
@@ -105,6 +113,11 @@ impl<T: MemTable> LSMTree<T> {
         ret
     }
 
+    fn len(&self) -> usize {
+        let sstables = self.sstables.read().unwrap();
+        sstables.len()
+    }
+
     fn generate_new_sstable_path(&mut self) -> String {
         let ret = format!(
             "{}/{:08}.sstable",
@@ -126,12 +139,17 @@ impl<T: MemTable> LSMTree<T> {
             self.sstables.clone(),
             memtable_lock,
         ));
+
+        if self.len() > 32 {
+            self.merge_sstables();
+        }
     }
 
-    fn merge_memtables(&mut self) {
+    fn merge_sstables(&mut self) {
         let sstables_to_merge = (*self.sstables.read().unwrap()).clone();
 
         if sstables_to_merge.len() < 2 {
+            println!("Cannot merge less than 2 tables");
             return;
         }
 
@@ -144,12 +162,27 @@ impl<T: MemTable> LSMTree<T> {
             .expect("At least one sstable")
             .path
             .clone();
+
+        self.merge_tables_handle = Some(merge_sstables_thread(
+            self.sstables.clone(),
+            sstables_to_merge,
+            merged_sstable_path,
+        ))
     }
 
     fn wait_for_threads(&mut self) {
-        let handle_opt = std::mem::replace(&mut self.save_tmp_table_handle, None);
+        let save_handle_opt = std::mem::replace(&mut self.save_tmp_table_handle, None);
 
-        if let Some(handle) = handle_opt {
+        if let Some(handle) = save_handle_opt {
+            let result = handle.join();
+            if let Err(e) = result {
+                println!("Error in save memtable thread: {:?}", e);
+            }
+        }
+
+        let merge_handle_opt = std::mem::replace(&mut self.merge_tables_handle, None);
+
+        if let Some(handle) = merge_handle_opt {
             let result = handle.join();
             if let Err(e) = result {
                 println!("Error in save memtable thread: {:?}", e);
@@ -236,8 +269,8 @@ fn merge_sstables_thread(
     }
 
     thread::spawn(move || {
-        let merged_file =
-            File::open(format!("{}.tmp", merged_path)).expect("Should be able to create file");
+        let tmp_merged_path = format!("{}.tmp", merged_path);
+        let merged_file = File::create(&tmp_merged_path).expect("Should be able to create file");
         let mut writer = BufWriter::new(merged_file);
 
         let n_tables = sstables_to_merge.len();
@@ -262,6 +295,7 @@ fn merge_sstables_thread(
         }
 
         loop {
+
             // FIND INDEXES WITH LOWER KEY
             let first_some_index = current_key_vec.iter().position(|key_opt| key_opt.is_some());
 
@@ -282,11 +316,8 @@ fn merge_sstables_thread(
             let mut lowest_key_indexes: Vec<usize> =
                 vec![first_some_index.expect("We already checked that this is not None")];
 
-            for (i, current_key_opt) in current_key_vec
-                .iter()
-                .skip(lowest_key_indexes[0] + 1)
-                .enumerate()
-            {
+            for i in (lowest_key_indexes[0] + 1)..n_tables {
+                let current_key_opt = &current_key_vec[i];
                 if let Some(current_key) = current_key_opt {
                     match current_key.cmp(lowest_key) {
                         Ordering::Greater => {}
@@ -298,6 +329,7 @@ fn merge_sstables_thread(
                     }
                 }
             }
+
 
             // If multiple ones have the same key, use first in the sstables_to_merge reverse order
             // As current_key_vec has the same order as sstables_to_merge, we just have to take the
@@ -312,8 +344,8 @@ fn merge_sstables_thread(
                     .expect("Every key should have a value");
             let persisted_value = &buffer[..persisted_value_size];
 
+
             // Add key+value of lowest to the merged sstable
-            // TODO Write persisted_key + persisted_value
             writer
                 .write_all(&encoding::serialize_entry(persisted_key, persisted_value))
                 .expect("Should be able to write");
@@ -324,19 +356,28 @@ fn merge_sstables_thread(
                 if index != persisted_index {
                     encoding::skip_next_datum(&mut reader_vec[index], &mut buffer)
                         .expect("Every key should have a value");
+                }
 
-                    let key_size_opt =
-                        encoding::read_next_datum(&mut reader_vec[index], &mut buffer);
-                    current_key_vec[index] = match key_size_opt {
-                        Ok(key_size) => Some(buffer[..key_size].to_vec()),
-                        Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => None,
-                        Err(e) => panic!(e),
-                    }
+                let key_size_opt = encoding::read_next_datum(&mut reader_vec[index], &mut buffer);
+                current_key_vec[index] = match key_size_opt {
+                    Ok(key_size) => Some(buffer[..key_size].to_vec()),
+                    Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => None,
+                    Err(e) => panic!(e),
                 }
             }
         }
 
+        std::mem::drop(writer);
+
         let mut sstables = sstables.write().unwrap();
         sstables.retain(|table| sstables_to_merge.iter().find(|ttm| *ttm == table).is_none());
+        for sst in sstables_to_merge {
+            sst.delete().expect("Can delete old sstables");
+        }
+
+        fs::rename(&tmp_merged_path, &merged_path).expect("I can move file");
+        sstables.push(SSTable { path: merged_path });
+        // Sorting is needed if a newer table was added while merging old ones.
+        sstables.sort_by(|p1, p2| p1.path.cmp(&p2.path));
     })
 }
