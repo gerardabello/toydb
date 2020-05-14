@@ -75,8 +75,10 @@ pub fn serialize_entry(key: &[u8], value: &[u8]) -> Vec<u8> {
         panic!("Value bigger than 64kB");
     }
 
-    ret.extend_from_slice(&serialize_size(key.len() as u16));
-    ret.append(&mut value.to_vec());
+        ret.extend_from_slice(&serialize_size(key.len() as u16));
+        ret.append(&mut key.to_vec());
+        ret.extend_from_slice(&serialize_size(value.len() as u16));
+        ret.append(&mut value.to_vec());
     ret
 }
 
@@ -91,10 +93,7 @@ pub fn serialize_values(values: &[(&Vec<u8>, &Vec<u8>)]) -> Vec<u8> {
             panic!("Value bigger than 64kB");
         }
 
-        ret.extend_from_slice(&serialize_size(p.0.len() as u16));
-        ret.append(&mut p.0.clone());
-        ret.extend_from_slice(&serialize_size(p.1.len() as u16));
-        ret.append(&mut p.1.clone());
+        ret.append(&mut serialize_entry(p.0, p.1));
     }
 
     ret
