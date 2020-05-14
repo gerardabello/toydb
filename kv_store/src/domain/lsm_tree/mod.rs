@@ -1,12 +1,13 @@
 mod encoding;
 
+use std::cmp::Ordering;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 
 use std::panic;
 
-use std::io::{self, BufReader};
+use std::io::{self, BufReader, BufWriter};
 
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -21,14 +22,31 @@ struct SSTable {
 }
 
 impl SSTable {
-    fn get(&self, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
+    fn get_reader(&self) -> io::Result<BufReader<File>> {
         let file = File::open(&self.path)?;
-        let mut reader = BufReader::new(file);
+        Ok(BufReader::new(file))
+    }
+
+    fn get(&self, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
+        let mut reader = self.get_reader()?;
         let result = encoding::find_value(&mut reader, key);
         match result {
             Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => Ok(None),
             a => a,
         }
+    }
+}
+
+impl Clone for SSTable {
+    fn clone(&self) -> Self {
+        SSTable {
+            path: self.path.clone(),
+        }
+    }
+}
+impl PartialEq for SSTable {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
     }
 }
 
@@ -110,6 +128,24 @@ impl<T: MemTable> LSMTree<T> {
         ));
     }
 
+    fn merge_memtables(&mut self) {
+        let sstables_to_merge = (*self.sstables.read().unwrap()).clone();
+
+        if sstables_to_merge.len() < 2 {
+            return;
+        }
+
+        // We use the newest (last) sstable in sstables_to_merge as the path for the
+        // merged table, so the correct order will be maintained.
+        // This path is already used, so the merging operation will have to use a tmp file name
+        // until it deletes the merged ones.
+        let merged_sstable_path = sstables_to_merge
+            .last()
+            .expect("At least one sstable")
+            .path
+            .clone();
+    }
+
     fn wait_for_threads(&mut self) {
         let handle_opt = std::mem::replace(&mut self.save_tmp_table_handle, None);
 
@@ -125,12 +161,8 @@ impl<T: MemTable> LSMTree<T> {
         let memtable_result = {
             let memtable = self.tmp_memtable.read().unwrap();
             match &*memtable {
-                None => {
-                    None
-                }
-                Some(memtable) => {
-                    memtable.get(&key.to_vec()).cloned()
-                }
+                None => None,
+                Some(memtable) => memtable.get(&key.to_vec()).cloned(),
             }
         };
 
@@ -183,24 +215,128 @@ fn save_memtable_thread<T: MemTable + Send + Sync + 'static>(
         }
 
         {
+            // It's important to write both sstables and tmp_memtable at the same time, so there no
+            // point in time where the memtable is dropped and the corresponding sstable is not in
+            // the sstables list.
             let mut sstables = sstables.write().unwrap();
-            let mut memtable = memtable_lock.write().unwrap();
+            let mut tmp_memtable = memtable_lock.write().unwrap();
             sstables.push(SSTable { path });
-            *memtable = None;
+            *tmp_memtable = None;
         }
     })
 }
-/*
 
 fn merge_sstables_thread(
     sstables: Arc<RwLock<Vec<SSTable>>>,
     sstables_to_merge: Vec<SSTable>,
+    merged_path: String,
 ) -> thread::JoinHandle<()> {
+    if sstables_to_merge.len() < 2 {
+        panic!("Cannot merge less than 2 tables");
+    }
+
     thread::spawn(move || {
+        let merged_file =
+            File::open(format!("{}.tmp", merged_path)).expect("Should be able to create file");
+        let mut writer = BufWriter::new(merged_file);
+
+        let n_tables = sstables_to_merge.len();
+        let mut current_key_vec: Vec<Option<Vec<u8>>> = Vec::new();
+        current_key_vec.resize(n_tables, None);
+
+        let mut reader_vec: Vec<BufReader<File>> = sstables_to_merge
+            .iter()
+            .map(|sstable| sstable.get_reader().unwrap())
+            .collect();
+
+        let mut buffer: Vec<u8> = Vec::new();
+
+        // Read initial values
+        for i in 0..n_tables {
+            let key_size_opt = encoding::read_next_datum(&mut reader_vec[i], &mut buffer);
+            current_key_vec[i] = match key_size_opt {
+                Ok(key_size) => Some(buffer[..key_size].to_vec()),
+                Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => None,
+                Err(e) => panic!(e),
+            }
+        }
+
+        loop {
+            // FIND INDEXES WITH LOWER KEY
+            let first_some_index = current_key_vec.iter().position(|key_opt| key_opt.is_some());
+
+            if first_some_index.is_none() {
+                // All keys are None, we finished merging
+                break;
+            }
+
+            let mut lowest_key: &Vec<u8> = match current_key_vec
+                [first_some_index.expect("We already checked that this is not None")]
+            {
+                Some(ref v) => v,
+
+                // We already checked that first_some_index is an index of a Some
+                None => panic!("Should not get here"),
+            };
+
+            let mut lowest_key_indexes: Vec<usize> =
+                vec![first_some_index.expect("We already checked that this is not None")];
+
+            for (i, current_key_opt) in current_key_vec
+                .iter()
+                .skip(lowest_key_indexes[0] + 1)
+                .enumerate()
+            {
+                if let Some(current_key) = current_key_opt {
+                    match current_key.cmp(lowest_key) {
+                        Ordering::Greater => {}
+                        Ordering::Equal => lowest_key_indexes.push(i),
+                        Ordering::Less => {
+                            lowest_key_indexes = vec![i];
+                            lowest_key = current_key;
+                        }
+                    }
+                }
+            }
+
+            // If multiple ones have the same key, use first in the sstables_to_merge reverse order
+            // As current_key_vec has the same order as sstables_to_merge, we just have to take the
+            // last element from the lowest_key_indexes.
+            let persisted_index: usize = *lowest_key_indexes
+                .last()
+                .expect("Should have at least one element");
+
+            let persisted_key = lowest_key;
+            let persisted_value_size: usize =
+                encoding::read_next_datum(&mut reader_vec[persisted_index], &mut buffer)
+                    .expect("Every key should have a value");
+            let persisted_value = &buffer[..persisted_value_size];
+
+            // Add key+value of lowest to the merged sstable
+            // TODO Write persisted_key + persisted_value
+            writer
+                .write_all(&encoding::serialize_entry(persisted_key, persisted_value))
+                .expect("Should be able to write");
+
+            for index in lowest_key_indexes {
+                // Skip all values with the same key, as we already got the one we want
+                // (persisted_index).
+                if index != persisted_index {
+                    encoding::skip_next_datum(&mut reader_vec[index], &mut buffer)
+                        .expect("Every key should have a value");
+
+                    let key_size_opt =
+                        encoding::read_next_datum(&mut reader_vec[index], &mut buffer);
+                    current_key_vec[index] = match key_size_opt {
+                        Ok(key_size) => Some(buffer[..key_size].to_vec()),
+                        Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => None,
+                        Err(e) => panic!(e),
+                    }
+                }
+            }
+        }
+
         let mut sstables = sstables.write().unwrap();
-        let mut memtable = memtable_lock.write().unwrap();
-        sstables.push(SSTable { path });
-        *memtable = None;
+        sstables.retain(|table| sstables_to_merge.iter().find(|ttm| *ttm == table).is_none());
     })
 }
-*/
