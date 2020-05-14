@@ -229,8 +229,8 @@ fn save_memtable_thread<T: MemTable + Send + Sync + 'static>(
     })
 }
 
-fn merge_sstables(sstables_lock: Arc<RwLock<Vec<SSTable>>>, merged_path: String) -> () {
-    let mut sstables = sstables_lock.read().unwrap();
+fn merge_sstables(sstables_lock: Arc<RwLock<Vec<SSTable>>>, merged_path: String) {
+    let sstables = sstables_lock.read().unwrap();
     if sstables.len() < 2 {
         panic!("Cannot merge less than 2 tables");
     }

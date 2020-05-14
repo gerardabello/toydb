@@ -8,11 +8,12 @@ use std::mem;
 // The solution is to use a random value we call TOOMBSTONE. Instead of deleting we set the key
 // value to TOOMBSTONE. Lower level structs just save it as a regular value, but the KVStore
 // returns None if it finds it in "get", and stops searching.
-//
 pub const TOMBSTONE: [u8; 32] = [
     179, 210, 155, 16, 110, 229, 104, 202, 72, 124, 209, 13, 85, 192, 56, 71, 239, 10, 116, 199,
     186, 205, 163, 143, 3, 43, 125, 16, 157, 22, 47, 244,
 ];
+
+const MAX_MEMTABLE_ELEMENTS : usize = 10_000;
 
 pub trait MemTable: 'static + Sync + Send + std::fmt::Debug {
     fn new() -> Self;
@@ -38,7 +39,7 @@ impl<T: MemTable> KVStore<T> {
     pub fn set(&mut self, key: Vec<u8>, value: Vec<u8>) {
         self.memtable.set(key, value);
 
-        if self.memtable.len() > 3000 {
+        if self.memtable.len() > MAX_MEMTABLE_ELEMENTS {
             self.save_memtable();
         }
     }

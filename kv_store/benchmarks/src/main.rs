@@ -9,8 +9,12 @@ use std::time::{Duration, Instant};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-const SAMPLES: u32 = 32;
 const TMP_DIR: &str = "./tmp-dir";
+
+enum Operation {
+    Read((Vec<u8>, Vec<u8>)),
+    Write((Vec<u8>, Vec<u8>)),
+}
 
 fn black_box<T>(dummy: T) -> T {
     unsafe {
@@ -65,11 +69,12 @@ fn benchmark(mut f: impl FnMut()) -> Duration {
 fn benchmark_kv_store(
     mut benchmark_results: &mut kv_store::KVStore,
     name: &str,
+    samples: u32,
     mut setup_f: impl FnMut(&mut kv_store::KVStore) -> (),
     mut f: impl FnMut(&mut kv_store::KVStore) -> (),
 ) {
-    let mut duration = Duration::new(0,0);
-    for _ in 0..SAMPLES {
+    let mut duration = Duration::new(0, 0);
+    for _ in 0..samples {
         let mut kv: kv_store::KVStore = kv_store::KVStore::new(TMP_DIR);
         setup_f(&mut kv);
         let d = benchmark(|| {
@@ -79,7 +84,7 @@ fn benchmark_kv_store(
         std::mem::drop(kv);
         fs::remove_dir_all(TMP_DIR).expect("Remove tmp folder");
     }
-    print_benchmark_result(&mut benchmark_results, name, duration / SAMPLES);
+    print_benchmark_result(&mut benchmark_results, name, duration / samples);
 }
 
 fn serialize_duration(d: Duration) -> Vec<u8> {
@@ -110,6 +115,7 @@ fn main() {
     benchmark_kv_store(
         &mut benchmark_results,
         "Add 10_000 random entries to empty store",
+        32,
         |_| {},
         |kv| {
             for _ in 0..10_000 {
@@ -121,6 +127,7 @@ fn main() {
     benchmark_kv_store(
         &mut benchmark_results,
         "Get 10_000 random entries in empty store",
+        32,
         |_| {},
         |kv| {
             for _ in 0..10_000 {
@@ -132,6 +139,7 @@ fn main() {
     benchmark_kv_store(
         &mut benchmark_results,
         "Get 100 random entries in store with 100 random entries",
+        32,
         |kv| {
             for _ in 0..100 {
                 kv.set(random_bytes(), random_bytes());
@@ -147,6 +155,7 @@ fn main() {
     benchmark_kv_store(
         &mut benchmark_results,
         "Get 100 random entries in store with 1000 random entries",
+        32,
         |kv| {
             for _ in 0..1000 {
                 kv.set(random_bytes(), random_bytes());
@@ -162,6 +171,7 @@ fn main() {
     benchmark_kv_store(
         &mut benchmark_results,
         "Get 100 random entries in store with 10_000 random entries",
+        8,
         |kv| {
             for _ in 0..10_000 {
                 kv.set(random_bytes(), random_bytes());
@@ -179,6 +189,7 @@ fn main() {
         benchmark_kv_store(
             &mut benchmark_results,
             "Get 100 known entries in random order in store with 100 random entries",
+            32,
             |kv| {
                 let add_entries = entries.clone();
                 for entry in add_entries {
@@ -203,6 +214,7 @@ fn main() {
         benchmark_kv_store(
             &mut benchmark_results,
             "Get 100 known entries in random order in store with 1000 random entries",
+            32,
             |kv| {
                 let add_entries = all_entries.clone();
                 for entry in add_entries {
@@ -227,6 +239,7 @@ fn main() {
         benchmark_kv_store(
             &mut benchmark_results,
             "Get 100 known entries in random order in store with 10_000 random entries",
+            32,
             |kv| {
                 let add_entries = all_entries.clone();
                 for entry in add_entries {
@@ -251,6 +264,7 @@ fn main() {
         benchmark_kv_store(
             &mut benchmark_results,
             "Get 100 known entries in random order in store with 100_000 random entries",
+            32,
             |kv| {
                 let add_entries = all_entries.clone();
                 for entry in add_entries {
@@ -266,16 +280,58 @@ fn main() {
             },
         );
     }
-}
 
-/*
-fn main() {
-    let mut kv: kv_store::KVStore = kv_store::KVStore::new(TMP_DIR);
-    benchmark("Add 10_000 random 20 length values",|| {
-        for _ in 0..10_000 {
-            kv.set(random_bytes(), random_bytes());
-        }
-    });
-    fs::remove_dir_all(TMP_DIR).expect("Remove tmp folder");
+    {
+        let mut entries = random_entries(100_000);
+        let get_entries = (&entries[..6_0]).to_vec();
+        let set_entries = random_entries(3_0);
+        let get_missing_entries = random_entries(1_0);
+
+        let mut reads: Vec<Operation> = get_entries
+            .iter()
+            .map(|entry| Operation::Read(entry.clone()))
+            .collect();
+
+        let mut missing_reads: Vec<Operation> = get_missing_entries
+            .iter()
+            .map(|entry| Operation::Read(entry.clone()))
+            .collect();
+
+        let mut writes: Vec<Operation> = set_entries
+            .iter()
+            .map(|entry| Operation::Write(entry.clone()))
+            .collect();
+
+        let mut operations = Vec::new();
+        operations.append(&mut writes);
+        operations.append(&mut reads);
+        operations.append(&mut missing_reads);
+
+        shuffle_vec(&mut operations);
+        shuffle_vec(&mut entries);
+
+        benchmark_kv_store(
+            &mut benchmark_results,
+            // TODO this should run much faster (currently ~5s)
+            "Store with 100_000 elements. 100 operations in random order (30% set, 60% get, 10% get missing)",
+            1,
+            |kv| {
+                for entry in &entries {
+                    kv.set(entry.0.clone(), entry.1.clone());
+                }
+            },
+            |kv| {
+                for op in &operations {
+                    match op {
+                        Operation::Write(pair) => {
+                            kv.set(pair.0.clone(), pair.1.clone());
+                        }
+                        Operation::Read(pair) => {
+                            black_box(kv.get(&pair.0));
+                        }
+                    }
+                }
+            },
+        );
+    }
 }
-*/
