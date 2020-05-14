@@ -219,7 +219,7 @@ fn test_merge_tables_while_saving() {
 
     std::mem::drop(lsm_tree);
 
-    //fs::remove_dir_all(tmp_dir).expect("Remove tmp folder");
+    fs::remove_dir_all(tmp_dir).expect("Remove tmp folder");
 }
 
 #[test]
