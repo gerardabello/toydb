@@ -1,0 +1,5 @@
+- create config file
+- allow configure size of memtable in MB.
+- Add some form of cache for sstables. Maybe a confguration on how many MB of sstable cache is allowed.
+- Some way of configuring merging process. Max number of sstables? Merge when CPU usage is low enough?
+- Allow merging only some sstables (maybe just a thread that continuosly merges two tables?)

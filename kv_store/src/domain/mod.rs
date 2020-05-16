@@ -13,7 +13,7 @@ pub const TOMBSTONE: [u8; 32] = [
     186, 205, 163, 143, 3, 43, 125, 16, 157, 22, 47, 244,
 ];
 
-const MAX_MEMTABLE_ELEMENTS : usize = 10_000;
+const MAX_MEMTABLE_SIZE: usize = 60 * 1024 * 1024;
 
 pub trait MemTable: 'static + Sync + Send + std::fmt::Debug {
     fn new() -> Self;
@@ -39,7 +39,7 @@ impl<T: MemTable> KVStore<T> {
     pub fn set(&mut self, key: Vec<u8>, value: Vec<u8>) {
         self.memtable.set(key, value);
 
-        if self.memtable.len() > MAX_MEMTABLE_ELEMENTS {
+        if self.memtable.len() > MAX_MEMTABLE_SIZE / 60{
             self.save_memtable();
         }
     }

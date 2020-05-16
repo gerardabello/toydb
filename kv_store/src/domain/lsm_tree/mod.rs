@@ -23,6 +23,7 @@ struct SSTable {
 }
 
 const BUFREADER_CAPACITY : usize= 20 * 1024 * 2014;
+const MAX_SSTABLES : usize = 8;
 
 impl SSTable {
     fn get_reader(&self) -> io::Result<BufReader<File>> {
@@ -39,7 +40,7 @@ impl SSTable {
         }
     }
 
-    fn delete(&self) -> io::Result<()> {
+    fn delete_file(&self) -> io::Result<()> {
         fs::remove_file(&self.path)?;
         Ok(())
     }
@@ -128,7 +129,7 @@ impl<T: MemTable> LSMTree<T> {
     }
 
     pub fn save_memtable(&mut self, memtable: T) {
-        self._save_memtable(memtable, self.len() > 32);
+        self._save_memtable(memtable, self.len() > MAX_SSTABLES);
     }
 
     fn _save_memtable(&mut self, memtable: T, merge: bool) {
@@ -337,7 +338,7 @@ fn merge_sstables(sstables_lock: Arc<RwLock<Vec<SSTable>>>, merged_path: String)
 
     let mut sstables = sstables_lock.write().unwrap();
     for sst in &*sstables {
-        sst.delete().expect("Can delete old sstables");
+        sst.delete_file().expect("Can delete old sstables");
     }
 
     fs::rename(&tmp_merged_path, &merged_path).expect("I can move file");
