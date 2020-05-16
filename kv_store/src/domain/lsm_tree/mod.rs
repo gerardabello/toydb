@@ -22,10 +22,12 @@ struct SSTable {
     path: String,
 }
 
+const BUFREADER_CAPACITY : usize= 20 * 1024 * 2014;
+
 impl SSTable {
     fn get_reader(&self) -> io::Result<BufReader<File>> {
         let file = File::open(&self.path)?;
-        Ok(BufReader::new(file))
+        Ok(BufReader::with_capacity(BUFREADER_CAPACITY, file))
     }
 
     fn get(&self, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
