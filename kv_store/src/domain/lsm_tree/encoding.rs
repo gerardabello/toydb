@@ -29,17 +29,6 @@ pub fn read_next_datum<Tr: Read + Seek>(
     Ok(size as usize)
 }
 
-pub fn skip_next_datum<Tr: Read + Seek>(
-    reader: &mut Tr,
-    buffer: &mut Vec<u8>,
-) -> io::Result<usize> {
-    let size = read_size(reader, buffer)?;
-
-    reader.seek(SeekFrom::Current(size as i64))?;
-
-    Ok(size as usize)
-}
-
 pub fn find_value<Tr: Read + Seek>(reader: &mut Tr, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
     // 256 seams a reasonable nubmber to reserve, although values could be as big as
     //     u16::max_value()
@@ -55,7 +44,7 @@ pub fn find_value<Tr: Read + Seek>(reader: &mut Tr, key: &[u8]) -> io::Result<Op
             let value = buffer[..(value_size as usize)].to_vec();
             return Ok(Some(value));
         } else {
-            skip_next_datum(reader, &mut buffer)?;
+            read_next_datum(reader, &mut buffer)?;
         }
     }
 }

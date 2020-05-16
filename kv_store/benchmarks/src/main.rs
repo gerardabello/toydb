@@ -283,9 +283,9 @@ fn main() {
 
     {
         let mut entries = random_entries(100_000);
-        let get_entries = (&entries[..6_0]).to_vec();
-        let set_entries = random_entries(3_0);
-        let get_missing_entries = random_entries(1_0);
+        let get_entries = (&entries[..6_00]).to_vec();
+        let set_entries = random_entries(3_00);
+        let get_missing_entries = random_entries(1_00);
 
         let mut reads: Vec<Operation> = get_entries
             .iter()
@@ -313,7 +313,7 @@ fn main() {
         benchmark_kv_store(
             &mut benchmark_results,
             // TODO this should run much faster (currently ~5s)
-            "Store with 100_000 elements. 100 operations in random order (30% set, 60% get, 10% get missing)",
+            "Store with 100_000 elements. 1000 operations in random order (30% set, 60% get, 10% get missing)",
             1,
             |kv| {
                 for entry in &entries {

@@ -317,7 +317,7 @@ fn merge_sstables(sstables_lock: Arc<RwLock<Vec<SSTable>>>, merged_path: String)
             // Skip all values with the same key, as we already got the one we want
             // (persisted_index).
             if index != persisted_index {
-                encoding::skip_next_datum(&mut reader_vec[index], &mut buffer)
+                encoding::read_next_datum(&mut reader_vec[index], &mut buffer)
                     .expect("Every key should have a value");
             }
 
