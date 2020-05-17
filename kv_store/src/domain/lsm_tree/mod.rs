@@ -22,8 +22,8 @@ struct SSTable {
     path: String,
 }
 
-const BUFREADER_CAPACITY : usize= 20 * 1024 * 2014;
-const MAX_SSTABLES : usize = 8;
+const BUFREADER_CAPACITY: usize = 20 * 1024 * 2014;
+const MAX_SSTABLES: usize = 8;
 
 impl SSTable {
     fn get_reader(&self) -> io::Result<BufReader<File>> {
@@ -284,8 +284,12 @@ fn merge_sstables(sstables_lock: Arc<RwLock<Vec<SSTable>>>, merged_path: String)
         let mut lowest_key_indexes: Vec<usize> =
             vec![first_some_index.expect("We already checked that this is not None")];
 
-        for i in (lowest_key_indexes[0] + 1)..n_tables {
-            let current_key_opt = &current_key_vec[i];
+        for (i, current_key_opt) in current_key_vec
+            .iter()
+            .enumerate()
+            .take(n_tables)
+            .skip(lowest_key_indexes[0] + 1)
+        {
             if let Some(current_key) = current_key_opt {
                 match current_key.cmp(lowest_key) {
                     Ordering::Greater => {}
