@@ -5,7 +5,7 @@ members = [
 ]
 
 [package]
-name = "gerardb"
+name = "toydb"
 version = "0.1.0"
 authors = ["Gerard Abelló Serras <gerardabello@gmail.com>"]
 edition = "2018"
