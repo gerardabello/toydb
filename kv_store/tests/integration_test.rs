@@ -5,7 +5,6 @@ use std::time::Duration;
 use std::fs;
 
 macro_rules! byte_vec {
-    // `()` indicates that the macro takes no argument.
     ($a: expr) => {
         // The macro will expand into the contents of this block.
         String::from($a).into_bytes()
